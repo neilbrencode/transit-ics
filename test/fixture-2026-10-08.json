@@ -1,0 +1,66 @@
+{
+  "_note": "Trimmed snapshot of https://s3.amazonaws.com/st-service-alerts-prod/alerts_pb.json taken 2026-10-08 ~17:06 PT. Long descriptions shortened; ids, periods, routes and URLs are verbatim.",
+  "header": { "gtfs_realtime_version": "2.0", "incrementality": "FULL_DATASET", "timestamp": 1791504386 },
+  "entity": [
+    {
+      "id": "16623",
+      "alert": {
+        "header_text": { "translation": [{ "text": "Starting Monday, March 16, Sound Transit will close Kent Station’s northwest Sounder surface parking lot.", "language": "en" }] },
+        "description_text": { "translation": [{ "text": "The only available spots for this lot will be three ADA parking spots.", "language": "en" }] },
+        "url": { "translation": [{ "text": "https://www.soundtransit.org/system-expansion/kent-station-parking-access-improvements", "language": "en" }] },
+        "active_period": [{ "start": 1773655200, "end": 1798799400 }],
+        "informed_entity": [{ "agency_id": "40", "route_type": 2, "route_id": "SNDR_TL", "stop_id": "S_KE_NB" }]
+      }
+    },
+    {
+      "id": "20937",
+      "alert": {
+        "header_text": { "translation": [{ "text": "Carin Leon today at Climate Pledge Arena, start time 8:00 p.m. Please plan ahead for additional travel time.", "language": "en" }] },
+        "description_text": { "translation": [{ "text": "Please plan ahead for additional travel time and anticipate crowds in stations, on platforms, in trains, and in parking facilities. On event days, parking facilities fill up quickly and earlier in the day. Plan accordingly to ensure you can secure parking. ", "language": "en" }] },
+        "url": { "translation": [{ "text": "https://www.soundtransit.org/ride-with-us/popular-destinations/climate-pledge-arena", "language": "en" }] },
+        "active_period": [{ "start": 1791514800, "end": 1791527400 }],
+        "informed_entity": [{ "agency_id": "40", "route_type": 0, "route_id": "100479" }, { "agency_id": "40", "route_type": 0, "route_id": "2LINE" }]
+      }
+    },
+    {
+      "id": "20993",
+      "alert": {
+        "header_text": { "translation": [{ "text": "From Oct 6 thru Oct 9, approximately at 10:30 p.m. through the end of service each night, shuttle buses will replace trains between Northgate and Westlake stations.    ", "language": "en" }] },
+        "description_text": { "translation": [{ "text": "Shuttle buses will run every 10–15 minutes between Northgate and Westlake stations.\r\n\nAffected stops:\r\n\nNorthgate\r\n-To Federal Way: Northgate Station - Bay 4", "language": "en" }] },
+        "url": { "translation": [{ "text": "https://www.soundtransit.org/ride-with-us/changes-affect-my-ride/planned-service-disruptions", "language": "en" }] },
+        "active_period": [{ "start": 1791351000, "end": 1791624600 }],
+        "informed_entity": [{ "agency_id": "40", "route_type": 0, "route_id": "100479" }, { "agency_id": "40", "route_type": 0, "route_id": "2LINE" }]
+      }
+    },
+    {
+      "id": "21008",
+      "alert": {
+        "header_text": { "translation": [{ "text": "Link shuttle buses will replace 2 Line trains between South Bellevue and Int'l District/Chinatown stations for scheduled maintenance from Saturday, October 17 until end of service on Sunday, October 18. ", "language": "en" }] },
+        "description_text": { "translation": [{ "text": "2 Line will continue operating between Downtown Redmond to South Bellevue stations with 10 minutes between trains; Link shuttle buses will run approximately every 10 to 15 minutes, between South Bellevue and Int'l District/Chinatown stations.  \r\n", "language": "en" }] },
+        "url": { "translation": [{ "text": "https://www.soundtransit.org/ride-with-us/changes-affect-my-ride/planned-service-disruptions ", "language": "en" }] },
+        "active_period": [{ "start": 1792231200, "end": 1792402200 }],
+        "informed_entity": [{ "agency_id": "40", "route_type": 0, "route_id": "2LINE" }]
+      }
+    },
+    {
+      "id": "21145",
+      "alert": {
+        "header_text": { "translation": [{ "text": "Federal Way Downtown Station - Elevator 1 unavailable until further notice due to scheduled maintenance.", "language": "en" }] },
+        "description_text": { "translation": [{ "text": "To ride the 1 Line:\r\n\n1. Go to the opposite end of the station.", "language": "en" }] },
+        "url": { "translation": [{ "text": "https://SoundTransit.org/alert/st/21145", "language": "en" }] },
+        "active_period": [{ "start": 1791292500 }],
+        "informed_entity": [{ "agency_id": "40", "route_type": 0, "route_id": "100479", "stop_id": "S07-T1" }]
+      }
+    },
+    {
+      "id": "21216",
+      "alert": {
+        "header_text": { "translation": [{ "text": "From Tuesday, Sept. 8, through Saturday, Oct. 31, from 6 a.m. to 5 p.m. daily, sidewalk revision work will take place at 77th Ave SE near the west entrance to Mercer Island Station.", "language": "en" }] },
+        "description_text": { "translation": [{ "text": "This work will take place outside the west entrance of 77th Ave SE. The sidewalk will be closed to northbound traffic during working hours, including the drop-off/pick-up location. ", "language": "en" }] },
+        "url": { "translation": [{ "text": "https://www.soundtransit.org/alerts ", "language": "en" }] },
+        "active_period": [{ "start": 1791496440, "end": 1793491200 }],
+        "informed_entity": [{ "agency_id": "40", "route_type": 0, "route_id": "2LINE", "stop_id": "E07-T2" }]
+      }
+    }
+  ]
+}
