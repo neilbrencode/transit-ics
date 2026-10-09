@@ -47,6 +47,10 @@ each. It uses no GitHub Actions minutes.
 
 ## Deploy (PowerShell)
 
+Live at <https://transit-ics.pnw-st.workers.dev/transit.ics>. For the full
+setup, update, rollback and troubleshooting steps, see the
+[Cloudflare runbook](docs/runbook-cloudflare.md). Quick version:
+
 `wrangler dev` runs the Worker locally in `workerd`, Cloudflare's runtime. It
 works on Windows x64. `workerd` has no Windows-ARM64 build, so on an ARM64
 laptop use WSL (Ubuntu) for `wrangler dev`, or skip it. `wrangler deploy` only
