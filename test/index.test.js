@@ -87,6 +87,23 @@ test("non-ASCII text (en dash, curly quote) folds without splitting characters",
   assert.match(byId(evs, "20993").description, /every 10–15 minutes/);
 });
 
+test("line breaks in feed id or url cannot inject iCalendar lines", () => {
+  const evil = {
+    entity: [{
+      id: "1\r\nBEGIN:VEVENT",
+      alert: {
+        informed_entity: [{ route_id: "2LINE" }],
+        active_period: [{ start: NOW, end: NOW + 3600 }],
+        url: { translation: [{ text: "https://x\nSUMMARY:pwned" }] },
+      },
+    }],
+  };
+  const ics = buildCalendar(evil, ["2LINE"], NOW);
+  assert.equal(events(ics).length, 1);
+  assert.equal((ics.match(/^BEGIN:VEVENT/gm) ?? []).length, 1);
+  assert.ok(!/^SUMMARY:pwned/m.test(ics));
+});
+
 test("empty feed still yields a valid calendar", () => {
   const evs = events(buildCalendar({ header: { timestamp: NOW }, entity: [] }, ["2LINE"], NOW));
   assert.equal(evs.length, 0);
@@ -112,6 +129,13 @@ test("handler serves text/calendar for /transit.ics", async () => {
 test("handler honours ?routes=", async () => {
   const res = await call("/transit.ics?routes=2LINE,100479", Response.json(feed));
   assert.equal(events(await res.text()).length, 5);
+});
+
+test("route ids with line breaks or punctuation are rejected with 400", async () => {
+  for (const q of ["2LINE%0D%0ABEGIN:VEVENT", "2LINE;X", ","]) {
+    const res = await call(`/transit.ics?routes=${q}`, Response.json(feed));
+    assert.equal(res.status, 400, q);
+  }
 });
 
 test("upstream failure returns 502, never an empty calendar", async () => {

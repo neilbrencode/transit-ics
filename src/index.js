@@ -9,6 +9,7 @@
 
 const FEED_URL = "https://s3.amazonaws.com/st-service-alerts-prod/alerts_pb.json";
 const DEFAULT_ROUTES = ["2LINE"];
+const ROUTE_ID = /^[A-Za-z0-9_]+$/;
 const TZ = "America/Los_Angeles";
 const CACHE_SECONDS = 300; // cache the upstream feed at Cloudflare's edge for 5 min
 // Periods longer than this become all-day events (a banner across the top of
@@ -29,6 +30,10 @@ export default {
       .split(",")
       .map((r) => r.trim())
       .filter(Boolean);
+    // Route ids are echoed into X-WR-CALNAME; reject anything that could inject lines.
+    if (!routes.length || !routes.every((r) => ROUTE_ID.test(r))) {
+      return new Response("Invalid routes", { status: 400 });
+    }
 
     const upstream = await fetch(FEED_URL, {
       cf: { cacheTtl: CACHE_SECONDS, cacheEverything: true },
@@ -72,7 +77,8 @@ export function buildCalendar(feed, routes, now = Math.floor(Date.now() / 1000))
     if (![...alertRoutes].some((r) => wanted.has(r))) continue;
 
     const summary = text(alert.header_text) || "Sound Transit alert";
-    const link = text(alert.url);
+    const link = singleLine(text(alert.url));
+    const id = singleLine(String(entity.id));
     const description = [text(alert.description_text), link].filter(Boolean).join("\n\n");
     const periods = alert.active_period?.length ? alert.active_period : [{}];
 
@@ -85,7 +91,7 @@ export function buildCalendar(feed, routes, now = Math.floor(Date.now() / 1000))
       const allDay = openEnded || (end - start) / 3600 > ALL_DAY_THRESHOLD_HOURS;
 
       lines.push("BEGIN:VEVENT");
-      lines.push(`UID:st-alert-${entity.id}-${i}@transit-ics`);
+      lines.push(`UID:st-alert-${id}-${i}@transit-ics`);
       lines.push(`DTSTAMP:${stamp}`);
       if (allDay) {
         lines.push(`DTSTART;VALUE=DATE:${toLocalDate(start)}`);
@@ -128,6 +134,11 @@ function toLocalDate(epochSeconds, addDays = 0) {
   const get = (type) => Number(parts.find((p) => p.type === type).value);
   const d = new Date(Date.UTC(get("year"), get("month") - 1, get("day") + addDays));
   return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+// For unescaped properties (UID, URL): drop line breaks so feed data can't add lines
+function singleLine(s) {
+  return s.replace(/[\r\n]/g, "");
 }
 
 // RFC 5545 text escaping
