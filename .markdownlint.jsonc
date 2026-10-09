@@ -1,0 +1,6 @@
+{
+  // Prose is wrapped by sense, not at a fixed column
+  "MD013": false,
+  // House style: compact |---|---| pipe tables
+  "MD060": false
+}

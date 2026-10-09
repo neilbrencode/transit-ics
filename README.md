@@ -35,7 +35,9 @@ flowchart LR
 | 1 Line | `100479` |
 | Sounder N/S | `SNDR_EV`, `SNDR_TL` (check feed) |
 
-Example: `https://transit-ics.<you>.workers.dev/transit.ics?routes=2LINE,100479`
+Example: `https://transit-ics.<subdomain>.workers.dev/transit.ics?routes=2LINE,100479`
+
+Route ids are 1–32 letters, digits or `_`, at most 10 per request; anything else returns 400.
 
 ## Cost
 
@@ -45,16 +47,25 @@ each. It uses no GitHub Actions minutes.
 
 ## Deploy (PowerShell)
 
-Your laptop is Windows on ARM64. `wrangler deploy` should work natively, but
-`wrangler dev` needs `workerd`, which has no Windows-ARM64 build. If either one
-fails, run the same commands in WSL (Ubuntu), or use the dashboard route below.
+The feed is served at `https://transit-ics.<subdomain>.workers.dev/transit.ics`.
+The real subdomain is deliberately kept out of this repo, because anyone who
+knows it could use up the free plan's daily request limit. For setup, updates,
+rollback, troubleshooting and hostname handling, see the
+[Cloudflare runbook](docs/runbook-cloudflare.md). Quick version:
+
+`wrangler dev` runs the Worker locally in `workerd`, Cloudflare's runtime. It
+works on Windows x64. `workerd` has no Windows-ARM64 build, so on an ARM64
+laptop use WSL (Ubuntu) for `wrangler dev`, or skip it. `wrangler deploy` only
+uploads code and does not need `workerd`.
+
+Run these one at a time (PowerShell 7+; `&&` stops at the first failure):
 
 ```powershell
 cd transit-ics
-npm install            # local only; nothing installed globally
-npm test               # 15 tests, offline, uses the saved fixture
-npx wrangler login     # opens browser, one-time
-npx wrangler deploy    # prints https://transit-ics.<subdomain>.workers.dev
+npm install                          # local only; nothing installed globally
+npx wrangler dev                     # optional: http://localhost:8787/transit.ics against the live feed
+npx wrangler login                   # opens browser, one-time
+npm test && npx wrangler deploy      # tests offline first; prints https://transit-ics.<subdomain>.workers.dev
 ```
 
 Then open `https://transit-ics.<subdomain>.workers.dev/transit.ics` in a browser.

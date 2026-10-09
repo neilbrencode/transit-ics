@@ -9,6 +9,8 @@
 
 const FEED_URL = "https://s3.amazonaws.com/st-service-alerts-prod/alerts_pb.json";
 const DEFAULT_ROUTES = ["2LINE"];
+const ROUTE_ID = /^[A-Za-z0-9_]{1,32}$/;
+const MAX_ROUTES = 10;
 const TZ = "America/Los_Angeles";
 const CACHE_SECONDS = 300; // cache the upstream feed at Cloudflare's edge for 5 min
 // Periods longer than this become all-day events (a banner across the top of
@@ -25,10 +27,18 @@ export default {
       return new Response("Not found", { status: 404 });
     }
 
-    const routes = (url.searchParams.get("routes") || DEFAULT_ROUTES.join(","))
+    // Route ids are echoed into X-WR-CALNAME. Reject anything that could inject
+    // lines, and bound the size so a huge query can't burn the CPU budget.
+    // (The decoded value is capped before splitting; Cloudflare's URL size
+    // limit bounds the parsing that happens before this.)
+    const param = url.searchParams.get("routes") || DEFAULT_ROUTES.join(",");
+    const routes = param.length > MAX_ROUTES * 33 /* 32 chars + comma */ ? [] : param
       .split(",")
       .map((r) => r.trim())
       .filter(Boolean);
+    if (!routes.length || routes.length > MAX_ROUTES || !routes.every((r) => ROUTE_ID.test(r))) {
+      return new Response("Invalid routes", { status: 400 });
+    }
 
     const upstream = await fetch(FEED_URL, {
       cf: { cacheTtl: CACHE_SECONDS, cacheEverything: true },
@@ -72,7 +82,8 @@ export function buildCalendar(feed, routes, now = Math.floor(Date.now() / 1000))
     if (![...alertRoutes].some((r) => wanted.has(r))) continue;
 
     const summary = text(alert.header_text) || "Sound Transit alert";
-    const link = text(alert.url);
+    const link = singleLine(text(alert.url));
+    const id = uidSafe(String(entity.id));
     const description = [text(alert.description_text), link].filter(Boolean).join("\n\n");
     const periods = alert.active_period?.length ? alert.active_period : [{}];
 
@@ -85,7 +96,7 @@ export function buildCalendar(feed, routes, now = Math.floor(Date.now() / 1000))
       const allDay = openEnded || (end - start) / 3600 > ALL_DAY_THRESHOLD_HOURS;
 
       lines.push("BEGIN:VEVENT");
-      lines.push(`UID:st-alert-${entity.id}-${i}@transit-ics`);
+      lines.push(`UID:st-alert-${id}-${i}@transit-ics`);
       lines.push(`DTSTAMP:${stamp}`);
       if (allDay) {
         lines.push(`DTSTART;VALUE=DATE:${toLocalDate(start)}`);
@@ -128,6 +139,19 @@ function toLocalDate(epochSeconds, addDays = 0) {
   const get = (type) => Number(parts.find((p) => p.type === type).value);
   const d = new Date(Date.UTC(get("year"), get("month") - 1, get("day") + addDays));
   return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+// UID-safe id: escape each UTF-16 code unit outside [A-Za-z0-9._~-] as a
+// fixed-width %xxxx. Never throws (even on lone surrogates), can't inject lines,
+// and is collision-free because "%" itself is escaped. Plain ids (ST's are
+// numeric) pass through unchanged, keeping existing UIDs stable.
+function uidSafe(s) {
+  return s.replace(/[^A-Za-z0-9._~-]/g, (c) => `%${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
+// For the unescaped URL property: drop line breaks so feed data can't add lines
+function singleLine(s) {
+  return s.replace(/[\r\n]/g, "");
 }
 
 // RFC 5545 text escaping

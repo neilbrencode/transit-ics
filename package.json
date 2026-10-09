@@ -6,10 +6,15 @@
   "scripts": {
     "test": "node --test",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "lint:md": "markdownlint-cli2"
   },
   "devDependencies": {
     "ical.js": "^2.2.1",
+    "markdownlint-cli2": "0.23.3",
     "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

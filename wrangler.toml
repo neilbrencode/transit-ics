@@ -2,3 +2,5 @@ name = "transit-ics"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
 workers_dev = true
+# No per-version preview hostnames: they'd add public URLs on the same daily quota
+preview_urls = false
