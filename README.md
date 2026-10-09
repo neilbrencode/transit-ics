@@ -37,7 +37,7 @@ flowchart LR
 
 Example: `https://transit-ics.<subdomain>.workers.dev/transit.ics?routes=2LINE,100479`
 
-Route ids may contain only letters, digits and `_`; anything else returns 400.
+Route ids are 1–32 letters, digits or `_`, at most 10 per request; anything else returns 400.
 
 ## Cost
 

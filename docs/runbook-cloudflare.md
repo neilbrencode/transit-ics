@@ -104,7 +104,7 @@ Rollback switches traffic to an earlier uploaded version immediately. It does no
 | `curl: (6) Could not resolve host` right after setup | New subdomain still propagating | Wait a few minutes |
 | 502 `Upstream feed error` | Sound Transit's S3 feed is failing | Nothing. By design ([ADR 4](adr/0004-upstream-failure-returns-502.md)), Outlook keeps its last good copy |
 | 500 / error 1101 | Worker threw, e.g. the feed's JSON shape changed | `npx wrangler tail transit-ics`, then request the URL to see the exception |
-| 400 `Invalid routes` | `?routes=` contains something other than letters, digits or `_` | Fix the subscription URL |
+| 400 `Invalid routes` | `?routes=` has an id that isn't 1–32 letters, digits or `_`, or more than 10 ids | Fix the subscription URL |
 | Calendar lags the website | Outlook's refresh cadence (hours) | Expected; keep email/SMS alerts for same-day changes |
 | `wrangler dev` fails on Windows ARM64 | `workerd` has no Windows-ARM64 build | Use WSL, or skip local dev. `wrangler deploy` does not need `workerd` |
 
