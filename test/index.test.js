@@ -114,6 +114,30 @@ test("ids differing only by line breaks still get distinct UIDs", () => {
   assert.ok(uids.includes("st-alert-alert1-0@transit-ics"), "plain ids must be unchanged");
 });
 
+test("CATEGORIES lists each route as its own value, not one comma-escaped value", () => {
+  const ics = buildCalendar(feed, ["2LINE"], NOW);
+  const e = byId(events(ics), "20937"); // informs 100479 and 2LINE
+  assert.deepEqual(e.component.getFirstProperty("categories").getValues(), ["100479", "2LINE"]);
+  assert.ok(ics.includes("\r\nCATEGORIES:100479,2LINE\r\n"), "raw line must use an unescaped comma");
+});
+
+test("informed entities without a route_id don't produce empty categories", () => {
+  const ics = buildCalendar(
+    { entity: [entity("1", { informed_entity: [{ route_id: "2LINE" }, { stop_id: "S1" }] })] }, ["2LINE"], NOW,
+  );
+  assert.ok(ics.includes("\r\nCATEGORIES:2LINE\r\n"));
+});
+
+test("each category value is escaped, so a hostile route id can't split or inject", () => {
+  const ics = buildCalendar(
+    { entity: [entity("1", { informed_entity: [{ route_id: "2LINE" }, { route_id: "A,B\r\nSUMMARY:x" }] })] },
+    ["2LINE"], NOW,
+  );
+  const [e] = events(ics);
+  assert.deepEqual(e.component.getFirstProperty("categories").getValues(), ["2LINE", "A,B\nSUMMARY:x"]);
+  assert.ok(!/^SUMMARY:x/m.test(ics));
+});
+
 test("UIDs for the captured fixture snapshot are exactly st-alert-<id>-<period>", () => {
   const routes = [...new Set(feed.entity.flatMap((e) => e.alert.informed_entity.map((i) => i.route_id)))];
   const uids = events(buildCalendar(feed, routes, NOW)).map((e) => e.uid).sort();

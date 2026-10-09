@@ -110,7 +110,8 @@ export function buildCalendar(feed, routes, now = Math.floor(Date.now() / 1000))
       lines.push(`SUMMARY:${escape((openEnded ? "[Ongoing] " : "") + summary)}`);
       if (description) lines.push(`DESCRIPTION:${escape(description)}`);
       if (link) lines.push(`URL:${link}`);
-      lines.push(`CATEGORIES:${escape([...alertRoutes].join(","))}`);
+      // A list property: escape each value, then join with a literal comma
+      lines.push(`CATEGORIES:${[...alertRoutes].filter(Boolean).map(escape).join(",")}`);
       lines.push("TRANSP:TRANSPARENT"); // don't mark you as busy
       lines.push("END:VEVENT");
     });
