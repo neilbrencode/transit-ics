@@ -160,7 +160,7 @@ import worker from "../src/index.js";
 async function call(path, upstream) {
   const real = globalThis.fetch;
   globalThis.fetch = async () => upstream;
-  try { return await worker.fetch(new Request(`https://x.workers.dev${path}`)); }
+  try { return await worker.fetch(new Request(`http://localhost${path}`)); }
   finally { globalThis.fetch = real; }
 }
 

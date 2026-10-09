@@ -47,8 +47,10 @@ each. It uses no GitHub Actions minutes.
 
 ## Deploy (PowerShell)
 
-Live at <https://transit-ics.pnw-st.workers.dev/transit.ics>. For the full
-setup, update, rollback and troubleshooting steps, see the
+The feed is served at `https://transit-ics.<subdomain>.workers.dev/transit.ics`.
+The real subdomain is deliberately kept out of this repo, because anyone who
+knows it could use up the free plan's daily request limit. For setup, updates,
+rollback, troubleshooting and hostname handling, see the
 [Cloudflare runbook](docs/runbook-cloudflare.md). Quick version:
 
 `wrangler dev` runs the Worker locally in `workerd`, Cloudflare's runtime. It
@@ -56,13 +58,14 @@ works on Windows x64. `workerd` has no Windows-ARM64 build, so on an ARM64
 laptop use WSL (Ubuntu) for `wrangler dev`, or skip it. `wrangler deploy` only
 uploads code and does not need `workerd`.
 
+Run these one at a time (PowerShell 7+; `&&` stops at the first failure):
+
 ```powershell
 cd transit-ics
-npm install            # local only; nothing installed globally
-npm test               # offline, uses the saved fixture
-npx wrangler dev       # optional: http://localhost:8787/transit.ics against the live feed
-npx wrangler login     # opens browser, one-time
-npx wrangler deploy    # prints https://transit-ics.<subdomain>.workers.dev
+npm install                          # local only; nothing installed globally
+npx wrangler dev                     # optional: http://localhost:8787/transit.ics against the live feed
+npx wrangler login                   # opens browser, one-time
+npm test && npx wrangler deploy      # tests offline first; prints https://transit-ics.<subdomain>.workers.dev
 ```
 
 Then open `https://transit-ics.<subdomain>.workers.dev/transit.ics` in a browser.

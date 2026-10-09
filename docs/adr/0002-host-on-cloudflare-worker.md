@@ -5,7 +5,7 @@
 
 ## Context
 
-Outlook.com subscribes to calendars by URL and re-fetches every few hours on its own schedule. Something must serve an `.ics` file at a stable public URL. Neil is sensitive to cost and to GitHub Actions (GHA) minutes, and his laptop is not always on.
+Outlook.com subscribes to calendars by URL and re-fetches every few hours on its own schedule. Something must serve an `.ics` file at a stable public URL. The owner is sensitive to cost and to GitHub Actions (GHA) minutes, and the owner's laptop is not always on.
 
 ## Decision
 
@@ -20,7 +20,7 @@ flowchart LR
 ## Alternatives considered
 
 - **GitHub Action on a cron, publishing a static `.ics` to GitHub Pages.** Spends GHA minutes if the repo is private. In a public repo, GitHub disables scheduled workflows after 60 days without repo activity, so the calendar would silently go stale. Data is only as fresh as the last run.
-- **Local scheduled task syncing events into Outlook via a local Model Context Protocol (MCP) server.** Only runs while the laptop is on, and only works for Neil's own calendar, not for family subscribers.
+- **Local scheduled task syncing events into Outlook via a local Model Context Protocol (MCP) server.** Only runs while the laptop is on, and only works for the owner's own calendar, not for family subscribers.
 
 ## Consequences
 
