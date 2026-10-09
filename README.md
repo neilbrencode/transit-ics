@@ -93,3 +93,7 @@ disruptions, keep the email/SMS alerts.
 - Feed: <https://s3.amazonaws.com/st-service-alerts-prod/alerts_pb.json> (GTFS-RT Alerts, JSON form, no key)
 - Terms: [Sound Transit Open Transit Data](https://www.soundtransit.org/help-contacts/business-information/open-transit-data-otd/otd-downloads)
 - `test/fixture-2026-10-08.json` is a trimmed real snapshot used by the tests.
+
+## License
+
+[MIT](LICENSE)
