@@ -82,7 +82,8 @@ test("concrete, odd-placeholder, mixed-case and preview hostnames are leaks", ()
 test("scanner reports leaks in contents, binaries and file names, with file and line; skips ignored", () => {
   const dir = mkdtempSync(join(tmpdir(), "no-leaks-"));
   try {
-    const git = (...args) => execFileSync("git", args, { cwd: dir });
+    // A global core.autocrlf=true would print LF/CRLF warnings on add
+    const git = (...args) => execFileSync("git", ["-c", "core.autocrlf=false", ...args], { cwd: dir });
     git("init", "-q");
     mkdirSync(join(dir, "dir with space"));
     writeFileSync(join(dir, "dir with space", "tracked é.md"), `a\nb\n${host("transit-ics", "abc123")}\n`);
