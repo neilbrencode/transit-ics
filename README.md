@@ -35,7 +35,9 @@ flowchart LR
 | 1 Line | `100479` |
 | Sounder N/S | `SNDR_EV`, `SNDR_TL` (check feed) |
 
-Example: `https://transit-ics.<you>.workers.dev/transit.ics?routes=2LINE,100479`
+Example: `https://transit-ics.<subdomain>.workers.dev/transit.ics?routes=2LINE,100479`
+
+Route ids may contain only letters, digits and `_`; anything else returns 400.
 
 ## Cost
 
@@ -45,14 +47,16 @@ each. It uses no GitHub Actions minutes.
 
 ## Deploy (PowerShell)
 
-Your laptop is Windows on ARM64. `wrangler deploy` should work natively, but
-`wrangler dev` needs `workerd`, which has no Windows-ARM64 build. If either one
-fails, run the same commands in WSL (Ubuntu), or use the dashboard route below.
+`wrangler dev` runs the Worker locally in `workerd`, Cloudflare's runtime. It
+works on Windows x64. `workerd` has no Windows-ARM64 build, so on an ARM64
+laptop use WSL (Ubuntu) for `wrangler dev`, or skip it. `wrangler deploy` only
+uploads code and does not need `workerd`.
 
 ```powershell
 cd transit-ics
 npm install            # local only; nothing installed globally
-npm test               # 15 tests, offline, uses the saved fixture
+npm test               # offline, uses the saved fixture
+npx wrangler dev       # optional: http://localhost:8787/transit.ics against the live feed
 npx wrangler login     # opens browser, one-time
 npx wrangler deploy    # prints https://transit-ics.<subdomain>.workers.dev
 ```
