@@ -231,3 +231,21 @@ test("other paths 404", async () => {
   const res = await call("/", Response.json(feed));
   assert.equal(res.status, 404);
 });
+
+test("refactor guard: Sound Transit output is byte-identical to the pre-refactor golden file", () => {
+  const golden = readFileSync(new URL("./golden-st-2026-10-08.ics", import.meta.url), "utf8");
+  assert.equal(buildCalendar(feed, ["2LINE", "100479", "SNDR_TL"], NOW), golden);
+});
+
+test("handler sends cache headers and asks Cloudflare to edge-cache the feed", async () => {
+  const real = globalThis.fetch;
+  let seen;
+  globalThis.fetch = async (url, init) => { seen = { url, init }; return Response.json(feed); };
+  try {
+    const res = await worker.fetch(new Request("http://localhost/transit.ics"));
+    assert.equal(res.headers.get("content-type"), "text/calendar; charset=utf-8");
+    assert.equal(res.headers.get("cache-control"), "public, max-age=300");
+    assert.equal(seen.url, "https://s3.amazonaws.com/st-service-alerts-prod/alerts_pb.json");
+    assert.deepEqual(seen.init, { cf: { cacheTtl: 300, cacheEverything: true } });
+  } finally { globalThis.fetch = real; }
+});

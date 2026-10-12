@@ -6,7 +6,7 @@ Feed URL template: `https://transit-ics.<subdomain>.workers.dev/transit.ics`. Th
 
 ```mermaid
 flowchart LR
-  A[1. Account subdomain] --> B[2. wrangler login] --> C[3. wrangler deploy] --> D[4. Verify] --> E[5. Subscribe in Outlook]
+  A[1. Account subdomain] --> B[2. wrangler login] --> S[3. WSDOT access code] --> C[4. wrangler deploy] --> D[5. Verify] --> E[6. Subscribe in Outlook]
 ```
 
 ## Prerequisites
@@ -50,7 +50,19 @@ This opens Cloudflare's **"Wrangler wants to access your account"** consent page
 
 On a machine without a browser, run `npx wrangler login --browser=false` and open the printed link yourself. The redirect goes to `localhost:8976`, so the browser must be on the same machine.
 
-## 3. Deploy
+## 3. Store the WSDOT access code (one-time)
+
+`/wsf.ics` needs a WSDOT Traveler API access code ([ADR 7](adr/0007-wsdot-access-code-secret.md)). Register at <https://wsdot.wa.gov/traffic/api/>, then:
+
+```powershell
+npx wrangler secret put WSF_API_ACCESS_CODE   # paste the code at the prompt
+```
+
+The value is encrypted and never shown again. Check it is set (names only, no values) with `npx wrangler secret list`. Keep the local copy outside the repo at `$env:USERPROFILE\.secrets\transit-ics.dev.vars` (one line, `WSF_API_ACCESS_CODE=<code>`), and run `npm run dev` to use it locally. Avoid plain `npx wrangler dev` with the code loaded: its local request tracing writes each upstream URL, code included, to a SQLite file under `.wrangler/`. `scripts/dev.mjs` turns that off (`X_LOCAL_OBSERVABILITY=false`) and keeps local state outside the repo.
+
+Without the secret, `/wsf.ics` returns 500 `WSF access code not configured`; `/transit.ics` is unaffected.
+
+## 4. Deploy
 
 ```powershell
 npm test && npx wrangler deploy
@@ -67,9 +79,9 @@ Deployed transit-ics triggers (0.40 sec)
 Current Version ID: <uuid>
 ```
 
-The Worker name (`transit-ics`), entry point, `compatibility_date` and `preview_urls = false` come from `wrangler.toml`. The upload is about 5 KiB with a 2 ms startup time.
+The Worker name (`transit-ics`), entry point, `compatibility_date` and `preview_urls = false` come from `wrangler.toml`. The upload is about 12 KiB.
 
-## 4. Verify
+## 5. Verify
 
 ```powershell
 $u = "https://transit-ics.<subdomain>.workers.dev"   # your real URL, from your password manager
@@ -79,11 +91,21 @@ curl.exe -s -o NUL -w "%{http_code}`n" "$u/transit.ics?routes=2LINE%0D%0AX"  # 4
 curl.exe -s -o NUL -w "%{http_code}`n" "$u/"                                 # 404
 ```
 
+For the ferries feed:
+
+```powershell
+curl.exe -s -D - -o NUL "$u/wsf.ics"                    # 200, text/calendar; charset=utf-8
+curl.exe -s "$u/wsf.ics" | Select-String "^SUMMARY"      # one line per current alert on routes 5, 3, 6
+curl.exe -s -o NUL -w "%{http_code}`n" "$u/wsf.ics?routes=12345"        # 400
+```
+
+Compare with WSF's [travel alerts page](https://wsdot.com/ferries/schedule/bulletin.aspx). The day after subscribing, check that a still-listed alert's banner now ends on the new day ([ADR 6](adr/0006-wsf-event-timing.md)).
+
 Compare the `SUMMARY` lines with the 2 Line alerts on [soundtransit.org](https://www.soundtransit.org/ride-with-us/service-alerts). On 2026-10-08 both showed the same four alerts.
 
-## 5. Subscribe
+## 6. Subscribe
 
-Follow [Subscribe in Outlook.com](../README.md#subscribe-in-outlookcom) in the README with your real URL. Add `?routes=2LINE,100479` for the 1 Line as well.
+Follow [Subscribe in Outlook.com](../README.md#subscribe-in-outlookcom) in the README with your real URL. Add `?routes=2LINE,100479` for the 1 Line as well. Subscribe to `/wsf.ics` as a separate calendar, for example **Ferries**.
 
 ## Updating
 
@@ -106,6 +128,16 @@ npx wrangler rollback <version-id> -m "reason"
 
 Rollback switches traffic to an earlier uploaded version immediately. It does not change the repo, so fix or revert in git afterwards.
 
+Versions before the ferries feed don't have `/wsf.ics`: rolling back past the first WSF version makes it return 404. Outlook treats that as a failed refresh and keeps showing the last events. First WSF-capable version: `<record the Version ID from the first deploy with /wsf.ics>`.
+
+## If the WSDOT access code leaks
+
+1. Register again at <https://wsdot.wa.gov/traffic/api/> for a new code.
+2. `npx wrangler secret put WSF_API_ACCESS_CODE` with the new code; it takes effect without a redeploy.
+3. Update `$env:USERPROFILE\.secrets\transit-ics.dev.vars`.
+4. Ask WSDOT to revoke the old code.
+5. If it reached git, removing it from history is not enough once pushed: treat it as public and do steps 1–4.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | What to do |
@@ -114,7 +146,11 @@ Rollback switches traffic to an earlier uploaded version immediately. It does no
 | 502 `Upstream feed error` | Sound Transit's S3 feed is failing | Nothing. By design ([ADR 4](adr/0004-upstream-failure-returns-502.md)), Outlook keeps its last good copy |
 | Error 1027 | Daily free-plan request limit reached | Wait for the reset at midnight UTC. If it recurs, the hostname has probably leaked; see below |
 | 500 / error 1101 | Worker threw, e.g. the feed's JSON shape changed | `npx wrangler tail transit-ics`, then request the URL to see the exception |
-| 400 `Invalid routes` | `?routes=` has an id that isn't 1–32 letters, digits or `_`, or more than 10 ids | Fix the subscription URL |
+| 400 `Invalid routes` | `?routes=` has an id that isn't 1–32 letters, digits or `_` (`/transit.ics`) or 1–4 digits (`/wsf.ics`), or more than 10 ids | Fix the subscription URL |
+| 400 `Invalid allroutes` | `?allroutes=` isn't `0` or `1` | Fix the subscription URL |
+| 500 `WSF access code not configured` | Secret missing | Section 3 |
+| 500 `WSF routes misconfigured` | `WSF_ROUTES` in `wrangler.toml` is invalid | Fix it and redeploy |
+| 502 `Upstream feed error` on `/wsf.ics` | WSDOT failing, or its response changed shape | Outlook keeps its last copy. If it persists, fetch the API yourself and compare with `test/fixture-wsf-2026-10-12.json` |
 | Calendar lags the website | Outlook's refresh cadence (hours) | Expected; keep email/SMS alerts for same-day changes |
 | `wrangler dev` fails on Windows ARM64 | `workerd` has no Windows-ARM64 build | Use WSL, or skip local dev. `wrangler deploy` does not need `workerd` |
 

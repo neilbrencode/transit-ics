@@ -2,3 +2,5 @@ node_modules/
 .wrangler/
 .playwright-mcp/
 .mcp.json
+.env
+.dev.vars

@@ -1,0 +1,106 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//transit-ics//Sound Transit alerts//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Transit (2LINE, 100479, SNDR_TL)
+X-WR-TIMEZONE:America/Los_Angeles
+REFRESH-INTERVAL;VALUE=DURATION:PT1H
+X-PUBLISHED-TTL:PT1H
+BEGIN:VEVENT
+UID:st-alert-16623-0@transit-ics
+DTSTAMP:20261009T000626Z
+DTSTART;VALUE=DATE:20260316
+DTEND;VALUE=DATE:20270101
+SUMMARY:Starting Monday\, March 16\, Sound Transit will close Kent Station
+ ’s northwest Sounder surface parking lot.
+DESCRIPTION:The only available spots for this lot will be three ADA parking
+  spots.\n\nhttps://www.soundtransit.org/system-expansion/kent-station-park
+ ing-access-improvements
+URL:https://www.soundtransit.org/system-expansion/kent-station-parking-acce
+ ss-improvements
+CATEGORIES:SNDR_TL
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:st-alert-20937-0@transit-ics
+DTSTAMP:20261009T000626Z
+DTSTART:20261009T030000Z
+DTEND:20261009T063000Z
+SUMMARY:Carin Leon today at Climate Pledge Arena\, start time 8:00 p.m. Ple
+ ase plan ahead for additional travel time.
+DESCRIPTION:Please plan ahead for additional travel time and anticipate cro
+ wds in stations\, on platforms\, in trains\, and in parking facilities. On
+  event days\, parking facilities fill up quickly and earlier in the day. P
+ lan accordingly to ensure you can secure parking.\n\nhttps://www.soundtran
+ sit.org/ride-with-us/popular-destinations/climate-pledge-arena
+URL:https://www.soundtransit.org/ride-with-us/popular-destinations/climate-
+ pledge-arena
+CATEGORIES:100479,2LINE
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:st-alert-20993-0@transit-ics
+DTSTAMP:20261009T000626Z
+DTSTART;VALUE=DATE:20261006
+DTEND;VALUE=DATE:20261010
+SUMMARY:From Oct 6 thru Oct 9\, approximately at 10:30 p.m. through the end
+  of service each night\, shuttle buses will replace trains between Northga
+ te and Westlake stations.
+DESCRIPTION:Shuttle buses will run every 10–15 minutes between Northgate 
+ and Westlake stations.\n\nAffected stops:\n\nNorthgate\n-To Federal Way: N
+ orthgate Station - Bay 4\n\nhttps://www.soundtransit.org/ride-with-us/chan
+ ges-affect-my-ride/planned-service-disruptions
+URL:https://www.soundtransit.org/ride-with-us/changes-affect-my-ride/planne
+ d-service-disruptions
+CATEGORIES:100479,2LINE
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:st-alert-21008-0@transit-ics
+DTSTAMP:20261009T000626Z
+DTSTART;VALUE=DATE:20261017
+DTEND;VALUE=DATE:20261019
+SUMMARY:Link shuttle buses will replace 2 Line trains between South Bellevu
+ e and Int'l District/Chinatown stations for scheduled maintenance from Sat
+ urday\, October 17 until end of service on Sunday\, October 18.
+DESCRIPTION:2 Line will continue operating between Downtown Redmond to Sout
+ h Bellevue stations with 10 minutes between trains\; Link shuttle buses wi
+ ll run approximately every 10 to 15 minutes\, between South Bellevue and I
+ nt'l District/Chinatown stations.\n\nhttps://www.soundtransit.org/ride-wit
+ h-us/changes-affect-my-ride/planned-service-disruptions
+URL:https://www.soundtransit.org/ride-with-us/changes-affect-my-ride/planne
+ d-service-disruptions
+CATEGORIES:2LINE
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:st-alert-21145-0@transit-ics
+DTSTAMP:20261009T000626Z
+DTSTART;VALUE=DATE:20261006
+DTEND;VALUE=DATE:20261009
+SUMMARY:[Ongoing] Federal Way Downtown Station - Elevator 1 unavailable unt
+ il further notice due to scheduled maintenance.
+DESCRIPTION:To ride the 1 Line:\n\n1. Go to the opposite end of the station
+ .\n\nhttps://SoundTransit.org/alert/st/21145
+URL:https://SoundTransit.org/alert/st/21145
+CATEGORIES:100479
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+UID:st-alert-21216-0@transit-ics
+DTSTAMP:20261009T000626Z
+DTSTART;VALUE=DATE:20261008
+DTEND;VALUE=DATE:20261101
+SUMMARY:From Tuesday\, Sept. 8\, through Saturday\, Oct. 31\, from 6 a.m. t
+ o 5 p.m. daily\, sidewalk revision work will take place at 77th Ave SE nea
+ r the west entrance to Mercer Island Station.
+DESCRIPTION:This work will take place outside the west entrance of 77th Ave
+  SE. The sidewalk will be closed to northbound traffic during working hour
+ s\, including the drop-off/pick-up location.\n\nhttps://www.soundtransit.o
+ rg/alerts
+URL:https://www.soundtransit.org/alerts
+CATEGORIES:2LINE
+TRANSP:TRANSPARENT
+END:VEVENT
+END:VCALENDAR
