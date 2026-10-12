@@ -5,10 +5,10 @@
 // obscurity, not access control.
 //
 // Also guards the WSDOT access code (ADR 7). It lives outside the repo, in
-// SECRETS_FILE; when that file exists, this test reads it on purpose and
-// fails if the value appears in any file, reporting file:line only, never the
-// value. CI has no such file, so there the scanner is proven with a synthetic
-// secret instead.
+// ENV_FILE (scripts/access-code.mjs). When that file exists, this test reads
+// it on purpose and fails if the value appears in any file, reporting
+// file:line only, never the value. CI has no such file, so there the scanner
+// is proven with a synthetic secret instead.
 //
 // Limits: scans files in the working tree (tracked, plus untracked files that
 // aren't ignored). It does not see commit messages, history, PRs or issues,
@@ -19,9 +19,10 @@ import { execFileSync } from "node:child_process";
 import {
   lstatSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync,
 } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ENV_FILE, readAccessCodes } from "../scripts/access-code.mjs";
 
 // The only hostnames that may appear: documented placeholders
 const ALLOWED = new Set([
@@ -30,7 +31,6 @@ const ALLOWED = new Set([
 ]);
 const HOST = /[A-Za-z0-9<>._-]+\.workers\.dev/gi;
 
-const SECRETS_FILE = join(homedir(), ".secrets", "transit-ics.dev.vars");
 // Secret hits are reported as this label, so a failure never prints the value
 const SECRET = "<secret>";
 
@@ -47,32 +47,6 @@ function findLeaks(text, secrets = []) {
     if (secrets.some((s) => line.includes(s) || line.includes(utf16(s)))) leaks.push({ line: i + 1, match: SECRET });
   });
   return leaks;
-}
-
-// Every access code assigned in a dotenv-style file (all of them: dotenv uses
-// the last, and an older one left above it is still a secret), or null if the
-// file is absent. Throws (without the value) if the file exists but holds no
-// usable code, so the real scan can't pass vacuously with an empty needle.
-function readAccessCodes(path) {
-  let text;
-  try {
-    text = readFileSync(path, "utf8");
-  } catch (e) {
-    if (e.code === "ENOENT") return null;
-    throw new Error(`can't read ${path}: ${e.code}`);
-  }
-  // Parse as dotenv does: quoted values keep their contents; unquoted values
-  // end at an inline " #" comment
-  // dotenv's own line pattern (the one wrangler bundles), so we search for
-  // exactly the value wrangler loads: quotes stripped, unquoted values cut at "#"
-  const DOTENV_LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
-  const values = [...text.replace(/\r\n?/g, "\n").matchAll(DOTENV_LINE)]
-    .filter(([, key]) => key === "WSF_API_ACCESS_CODE")
-    .map(([, , v = ""]) => v.trim().replace(/^(['"`])([\s\S]*)\1$/, "$2"));
-  if (!values.length || values.some((v) => v.length < 8)) {
-    throw new Error(`${path} has no usable WSF_API_ACCESS_CODE`);
-  }
-  return values;
 }
 
 // Every non-ignored file in the working tree: its path, plus its contents read
@@ -239,7 +213,7 @@ test("access code reader: absent file is null; a present file must hold a usable
 });
 
 test("the real WSDOT access code is not in any committed or committable file", (t) => {
-  const codes = readAccessCodes(SECRETS_FILE);
+  const codes = readAccessCodes(ENV_FILE);
   if (codes === null) return t.skip("no access code file on this machine (normal in CI)");
   const { files, leaks } = scanRepo(fileURLToPath(new URL("..", import.meta.url)), codes);
   assert.ok(files.length > 0, "scanned no files");
