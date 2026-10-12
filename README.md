@@ -71,10 +71,6 @@ npm test && npx wrangler deploy      # tests offline first; prints https://trans
 Then open `https://transit-ics.<subdomain>.workers.dev/transit.ics` in a browser.
 It should download a small `.ics` file.
 
-**No-tooling fallback:** in the Cloudflare dashboard, go to Workers & Pages,
-then Create, then Hello World. Choose **Edit code**, paste in `src/index.js`,
-and click Deploy.
-
 ## Subscribe in Outlook.com
 
 1. Go to Outlook.com, then Calendar, then **Add calendar**, then **Subscribe from web**.
