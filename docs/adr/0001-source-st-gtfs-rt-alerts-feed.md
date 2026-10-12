@@ -1,6 +1,6 @@
 # 1. Use Sound Transit's public GTFS-RT alerts feed as the data source
 
-- Status: Accepted
+- Status: Accepted (consequence amended by [ADR 7](0007-wsdot-access-code-secret.md))
 - Date: 2026-10-08
 
 ## Context
@@ -22,7 +22,7 @@ The protobuf form at `.../alerts.pb` carries the same data. We use JSON because 
 
 ## Consequences
 
-- No API key and no secrets anywhere in the project.
+- No API key and no secrets anywhere in the project. Still true of this feed; the later ferries feed adds one secret ([ADR 7](0007-wsdot-access-code-secret.md)).
 - Start and end times are Unix epochs and route ids are explicit, so filtering and calendar mapping are exact.
 - We depend on an undocumented-but-public S3 URL. If ST moves it, the Worker returns 502 (see [ADR 4](0004-upstream-failure-returns-502.md)) and the URL needs updating.
 - Real-data quirks (trailing spaces, `\r\n\n` line endings, missing `end`, non-ASCII text) must be handled in code. `test/fixture-2026-10-08.json` pins them.

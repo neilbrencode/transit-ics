@@ -4,6 +4,12 @@
 // docs/runbook-cloudflare.md). That prevents accidental disclosure; it is
 // obscurity, not access control.
 //
+// Also guards the WSDOT access code (ADR 7). It lives outside the repo, in
+// SECRETS_FILE; when that file exists, this test reads it on purpose and
+// fails if the value appears in any file, reporting file:line only, never the
+// value. CI has no such file, so there the scanner is proven with a synthetic
+// secret instead.
+//
 // Limits: scans files in the working tree (tracked, plus untracked files that
 // aren't ignored). It does not see commit messages, history, PRs or issues,
 // and it can't detect personal names.
@@ -13,7 +19,7 @@ import { execFileSync } from "node:child_process";
 import {
   lstatSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,35 +30,72 @@ const ALLOWED = new Set([
 ]);
 const HOST = /[A-Za-z0-9<>._-]+\.workers\.dev/gi;
 
-function findLeaks(text) {
+const SECRETS_FILE = join(homedir(), ".secrets", "transit-ics.dev.vars");
+// Secret hits are reported as this label, so a failure never prints the value
+const SECRET = "<secret>";
+
+// An ASCII secret as it appears in a UTF-16 file read as latin1 (NUL between
+// characters, either byte order), e.g. a file Windows PowerShell 5.1 wrote
+const utf16 = (s) => s.split("").join("\0");
+
+function findLeaks(text, secrets = []) {
   const leaks = [];
   text.split(/\r?\n/).forEach((line, i) => {
     for (const [match] of line.matchAll(HOST)) {
       if (!ALLOWED.has(match)) leaks.push({ line: i + 1, match });
     }
+    if (secrets.some((s) => line.includes(s) || line.includes(utf16(s)))) leaks.push({ line: i + 1, match: SECRET });
   });
   return leaks;
+}
+
+// Every access code assigned in a dotenv-style file (all of them: dotenv uses
+// the last, and an older one left above it is still a secret), or null if the
+// file is absent. Throws (without the value) if the file exists but holds no
+// usable code, so the real scan can't pass vacuously with an empty needle.
+function readAccessCodes(path) {
+  let text;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (e) {
+    if (e.code === "ENOENT") return null;
+    throw new Error(`can't read ${path}: ${e.code}`);
+  }
+  // Parse as dotenv does: quoted values keep their contents; unquoted values
+  // end at an inline " #" comment
+  // dotenv's own line pattern (the one wrangler bundles), so we search for
+  // exactly the value wrangler loads: quotes stripped, unquoted values cut at "#"
+  const DOTENV_LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
+  const values = [...text.replace(/\r\n?/g, "\n").matchAll(DOTENV_LINE)]
+    .filter(([, key]) => key === "WSF_API_ACCESS_CODE")
+    .map(([, , v = ""]) => v.trim().replace(/^(['"`])([\s\S]*)\1$/, "$2"));
+  if (!values.length || values.some((v) => v.length < 8)) {
+    throw new Error(`${path} has no usable WSF_API_ACCESS_CODE`);
+  }
+  return values;
 }
 
 // Every non-ignored file in the working tree: its path, plus its contents read
 // as latin1 so any bytes (binary included) are scanned rather than skipped.
 // Symlinks are scanned by target text (what git stores), not followed.
-// Path hits are reported as line 0. Throws if git fails.
-function scanRepo(root) {
+// Path hits are reported as line 0. Reported paths have any secret replaced
+// by SECRET, since a file name can carry one too. Throws if git fails.
+function scanRepo(root, secrets = []) {
   const out = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: root });
   const files = out.toString("utf8").split("\0").filter(Boolean);
   const leaks = [];
   for (const file of files) {
-    for (const { match } of findLeaks(file)) leaks.push({ file, line: 0, match });
+    const shown = secrets.reduce((name, s) => name.split(s).join(SECRET), file);
+    for (const { match } of findLeaks(file, secrets)) leaks.push({ file: shown, line: 0, match });
     const path = join(root, file);
     let text;
     try {
       text = lstatSync(path).isSymbolicLink() ? readlinkSync(path) : readFileSync(path, "latin1");
     } catch (e) {
       if (e.code === "ENOENT") continue; // tracked but deleted locally
-      throw e;
+      throw new Error(`can't read ${shown}: ${e.code}`); // e.message would include the raw path
     }
-    for (const leak of findLeaks(text)) leaks.push({ file, ...leak });
+    for (const leak of findLeaks(text, secrets)) leaks.push({ file: shown, ...leak });
   }
   return { files, leaks };
 }
@@ -132,4 +175,74 @@ test("no real *.workers.dev hostname is committed", () => {
   assert.ok(files.length > 0, "scanned no files");
   // Report location only, so a failing CI log doesn't echo the hostname
   assert.deepEqual(leaks.map(({ file, line }) => `${file}:${line}`), []);
+});
+
+test("secret scanner finds a synthetic code in tracked and untracked files, skips ignored, never prints it", () => {
+  const secret = "SYNTH-3f9a2c71-secret";
+  const dir = mkdtempSync(join(tmpdir(), "no-leaks-"));
+  try {
+    const git = (...args) => execFileSync("git", ["-c", "core.autocrlf=false", ...args], { cwd: dir });
+    git("init", "-q");
+    writeFileSync(join(dir, "tracked.js"), `a\nconst k = "${secret}";\n`);
+    writeFileSync(join(dir, ".gitignore"), ".dev.vars\n");
+    git("add", ".");
+    writeFileSync(join(dir, "untracked.md"), `see apiaccesscode=${secret}`);
+    writeFileSync(join(dir, `alerts-${secret}.json`), "{}");
+    writeFileSync(join(dir, ".dev.vars"), `WSF_API_ACCESS_CODE=${secret}\n`);
+    // UTF-16 files, as Windows PowerShell 5.1 writes them, in both byte orders
+    writeFileSync(join(dir, "notes-utf16le.txt"), Buffer.from(`﻿x\r\ncode ${secret}\r\n`, "utf16le"));
+    writeFileSync(join(dir, "notes-utf16be.txt"), Buffer.from(`y ${secret}`, "utf16le").swap16());
+
+    const { leaks } = scanRepo(dir, [secret]);
+    assert.deepEqual(
+      leaks.map(({ file, line }) => `${file}:${line}`).sort(),
+      ["alerts-<secret>.json:0", "notes-utf16be.txt:1", "notes-utf16le.txt:2", "tracked.js:2", "untracked.md:1"],
+    );
+    assert.ok(leaks.every(({ match }) => match === SECRET));
+    assert.ok(!JSON.stringify(leaks).includes(secret), "leak report must not contain the value");
+    assert.deepEqual(scanRepo(dir).leaks, [], "no needles, no secret findings");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("access code reader: absent file is null; a present file must hold a usable code", () => {
+  const dir = mkdtempSync(join(tmpdir(), "no-leaks-"));
+  try {
+    const file = join(dir, "x.dev.vars");
+    assert.equal(readAccessCodes(file), null);
+    for (const content of [
+      "WSF_API_ACCESS_CODE=abcdef123456\n",
+      'OTHER=1\r\nWSF_API_ACCESS_CODE="abcdef123456"\r\n',
+      "WSF_API_ACCESS_CODE='abcdef123456'\n",
+      "WSF_API_ACCESS_CODE=abcdef123456 # from WSDOT\n",
+      "WSF_API_ACCESS_CODE=abcdef123456#no space before the comment\n",
+      "WSF_API_ACCESS_CODE=\"abcdef123456\" # quoted, then a comment\n",
+      "export WSF_API_ACCESS_CODE = abcdef123456\n",
+    ]) {
+      writeFileSync(file, content);
+      assert.deepEqual(readAccessCodes(file), ["abcdef123456"]);
+    }
+    // Rotation: dotenv uses the last assignment, but both are scanned
+    writeFileSync(file, "WSF_API_ACCESS_CODE=old-code-1234\nWSF_API_ACCESS_CODE=new-code-5678\n");
+    assert.deepEqual(readAccessCodes(file), ["old-code-1234", "new-code-5678"]);
+    for (const content of [
+      "", "WSF_API_ACCESS_CODE=\n", "WSF_API_ACCESS_CODE=short\n", "WSDOT_KEY=abcdef123456\n",
+      "WSF_API_ACCESS_CODE=abcdef123456\nWSF_API_ACCESS_CODE=\n",
+    ]) {
+      writeFileSync(file, content);
+      assert.throws(() => readAccessCodes(file), (e) => !/abcdef|short/.test(e.message));
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the real WSDOT access code is not in any committed or committable file", (t) => {
+  const codes = readAccessCodes(SECRETS_FILE);
+  if (codes === null) return t.skip("no access code file on this machine (normal in CI)");
+  const { files, leaks } = scanRepo(fileURLToPath(new URL("..", import.meta.url)), codes);
+  assert.ok(files.length > 0, "scanned no files");
+  // Location only: the value itself must never reach a test log
+  assert.deepEqual(leaks.filter(({ match }) => match === SECRET).map(({ file, line }) => `${file}:${line}`), []);
 });

@@ -4,13 +4,14 @@
 // The Worker is stateless: Outlook matches events by UID, so an alert that
 // disappears from the feed disappears from the calendar on the next refresh.
 
-import { calendarHeader, escape, finish, singleLine, toLocalDate, toUtcStamp, uidSafe } from "./ical.js";
+import {
+  CACHE_SECONDS, calendarHeader, calendarResponse, escape, finish, singleLine, toLocalDate, toUtcStamp, uidSafe,
+} from "./ical.js";
 
 const FEED_URL = "https://s3.amazonaws.com/st-service-alerts-prod/alerts_pb.json";
 const DEFAULT_ROUTES = ["2LINE"];
 const ROUTE_ID = /^[A-Za-z0-9_]{1,32}$/;
 const MAX_ROUTES = 10;
-export const CACHE_SECONDS = 300; // cache the upstream feed at Cloudflare's edge for 5 min
 // Periods longer than this become all-day events (a banner across the top of
 // the calendar) instead of a block covering every hour of every day.
 const ALL_DAY_THRESHOLD_HOURS = 24;
@@ -45,15 +46,6 @@ export async function handleTransit(url) {
 
   const feed = await upstream.json();
   return calendarResponse(buildCalendar(feed, routes));
-}
-
-export function calendarResponse(body) {
-  return new Response(body, {
-    headers: {
-      "content-type": "text/calendar; charset=utf-8",
-      "cache-control": `public, max-age=${CACHE_SECONDS}`,
-    },
-  });
 }
 
 export function buildCalendar(feed, routes, now = Math.floor(Date.now() / 1000)) {

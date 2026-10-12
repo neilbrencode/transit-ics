@@ -5,7 +5,7 @@
   "description": "Sound Transit service alerts as a subscribable iCalendar feed (Cloudflare Worker)",
   "scripts": {
     "test": "node --test",
-    "dev": "wrangler dev",
+    "dev": "node scripts/dev.mjs",
     "deploy": "wrangler deploy",
     "lint:md": "markdownlint-cli2"
   },

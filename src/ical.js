@@ -1,6 +1,16 @@
 // iCalendar helpers shared by every feed (RFC 5545)
 
 export const TZ = "America/Los_Angeles";
+export const CACHE_SECONDS = 300; // cache upstream feeds at Cloudflare's edge for 5 min
+
+export function calendarResponse(body) {
+  return new Response(body, {
+    headers: {
+      "content-type": "text/calendar; charset=utf-8",
+      "cache-control": `public, max-age=${CACHE_SECONDS}`,
+    },
+  });
+}
 
 // VCALENDAR header lines; feeds push VEVENTs after these, then call finish()
 export function calendarHeader(prodId, name) {

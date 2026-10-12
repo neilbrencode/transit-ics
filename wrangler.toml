@@ -4,3 +4,13 @@ compatibility_date = "2026-09-01"
 workers_dev = true
 # No per-version preview hostnames: they'd add public URLs on the same daily quota
 preview_urls = false
+
+# Ferries feed defaults (/wsf.ics). The WSDOT access code is a secret, never
+# a var: npx wrangler secret put WSF_API_ACCESS_CODE
+[vars]
+WSF_ROUTES = "5,3,6" # Seattle/Bainbridge, Seattle/Bremerton, Edmonds/Kingston
+WSF_INCLUDE_ALL_ROUTES = "true"
+
+# Keep Workers Logs off, so request details are never stored (ADR 7)
+[observability]
+enabled = false
