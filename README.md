@@ -102,14 +102,8 @@ who has it can use the WSDOT API under your registration. See
 [ADR 7](docs/adr/0007-wsdot-access-code-secret.md).
 
 1. Register your email at <https://wsdot.wa.gov/traffic/api/> to get a code.
-2. Store it in Cloudflare (prompts for the value; nothing lands in the repo):
-
-   ```powershell
-   npx wrangler secret put WSF_API_ACCESS_CODE
-   ```
-
-3. For local runs, keep it **outside** this repo, so no tool working in the repo
-   can read or commit it:
+2. Save it **outside** this repo, so no tool working in the repo can read or
+   commit it:
 
    ```powershell
    New-Item -ItemType Directory -Force "$env:USERPROFILE\.secrets"
@@ -118,6 +112,13 @@ who has it can use the WSDOT API under your registration. See
 
    `npm run dev` loads it from there. `npm test` reads it on purpose and fails
    if the code appears in any file git could commit.
+
+3. Store it in Cloudflare from that file. The script refuses a blank code and
+   pipes it to wrangler, so nothing is typed or displayed:
+
+   ```powershell
+   npm run secret:put
+   ```
 
    Use `npm run dev`, not plain `npx wrangler dev`: plain `wrangler dev` records
    each upstream URL, access code included, in a local trace database under

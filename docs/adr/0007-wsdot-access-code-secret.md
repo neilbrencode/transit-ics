@@ -15,7 +15,7 @@ On 2026-10-12 the alerts operation answered without a code too. We send it anywa
 
 | Where it could leak | Control |
 |---|---|
-| Cloudflare | Stored with `npx wrangler secret put WSF_API_ACCESS_CODE` (encrypted; not shown again). Never in `wrangler.toml` `[vars]`, which is plain text. |
+| Cloudflare | Stored as a Worker secret (encrypted; not shown again) by `npm run secret:put`, which reads the outside file, refuses a blank code, pipes it to `wrangler secret put` on stdin and forces wrangler's log sanitising on. Plain `wrangler secret put` without an interactive prompt uploads a blank value and reports success. Never in `wrangler.toml` `[vars]`, which is plain text. |
 | Git | Kept **outside the working tree**, in `%USERPROFILE%\.secrets\transit-ics.dev.vars`, and loaded by `npm run dev` (`scripts/dev.mjs`, which passes `--env-file`). `.env` and `.dev.vars` are gitignored as a backstop. `test/no-leaks.test.js` reads the outside file on purpose and fails if the value appears in any file git could commit, reporting file:line only. |
 | AI review tools | Reviewer CLIs run in the working tree, and the code isn't there. This lowers exposure but isn't a hard boundary: any process running as the owner can read the outside file. |
 | Responses | Errors are fixed strings (`Upstream feed error`). No URL, status text, upstream body or exception text is ever returned. |

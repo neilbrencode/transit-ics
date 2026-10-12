@@ -54,11 +54,15 @@ On a machine without a browser, run `npx wrangler login --browser=false` and ope
 
 `/wsf.ics` needs a WSDOT Traveler API access code ([ADR 7](adr/0007-wsdot-access-code-secret.md)). Register at <https://wsdot.wa.gov/traffic/api/>, then:
 
+Save it first as one line, `WSF_API_ACCESS_CODE=<code>`, in `$env:USERPROFILE\.secrets\transit-ics.dev.vars` (outside the repo), then upload it from there:
+
 ```powershell
-npx wrangler secret put WSF_API_ACCESS_CODE   # paste the code at the prompt
+npm run secret:put   # scripts/put-secret.mjs: refuses a blank code, pipes it to wrangler on stdin
 ```
 
-The value is encrypted and never shown again. Check it is set (names only, no values) with `npx wrangler secret list`. Keep the local copy outside the repo at `$env:USERPROFILE\.secrets\transit-ics.dev.vars` (one line, `WSF_API_ACCESS_CODE=<code>`), and run `npm run dev` to use it locally. Avoid plain `npx wrangler dev` with the code loaded: its local request tracing writes each upstream URL, code included, to a SQLite file under `.wrangler/`. `scripts/dev.mjs` turns that off (`X_LOCAL_OBSERVABILITY=false`) and keeps local state outside the repo.
+Plain `npx wrangler secret put WSF_API_ACCESS_CODE` with the code pasted at the prompt also works in a normal terminal. Don't run that where there is no interactive prompt, such as a `!` command in Claude Code: wrangler then reads the value from empty input, uploads a **blank** secret and still prints `Success!` (seen 2026-10-12). `/wsf.ics` then returns 500 `WSF access code not configured`.
+
+The value is encrypted and never shown again. Check it is set (names only, no values) with `npx wrangler secret list`. Run `npm run dev` to use the local copy. Avoid plain `npx wrangler dev` with the code loaded: its local request tracing writes each upstream URL, code included, to a SQLite file under `.wrangler/`. `scripts/dev.mjs` turns that off (`X_LOCAL_OBSERVABILITY=false`) and keeps local state outside the repo.
 
 Without the secret, `/wsf.ics` returns 500 `WSF access code not configured`; `/transit.ics` is unaffected.
 
@@ -128,15 +132,14 @@ npx wrangler rollback <version-id> -m "reason"
 
 Rollback switches traffic to an earlier uploaded version immediately. It does not change the repo, so fix or revert in git afterwards.
 
-Versions before the ferries feed don't have `/wsf.ics`: rolling back past the first WSF version makes it return 404. Outlook treats that as a failed refresh and keeps showing the last events. First WSF-capable version: `<record the Version ID from the first deploy with /wsf.ics>`.
+Versions before the ferries feed don't have `/wsf.ics`: rolling back past the first WSF version makes it return 404. Outlook treats that as a failed refresh and keeps showing the last events. The first deploy with `/wsf.ics` was `bcb33f5a-f46d-4749-b7eb-1b322b7b19c3` (2026-10-12), but it carried the blank secret described in section 3, so `/wsf.ics` returned 500. The first version that served the feed is `d41b0331-1af7-44c2-ae66-729a22511b26`; don't roll back past it. A secret change creates a new version too, so later ids will differ.
 
 ## If the WSDOT access code leaks
 
 1. Register again at <https://wsdot.wa.gov/traffic/api/> for a new code.
-2. `npx wrangler secret put WSF_API_ACCESS_CODE` with the new code; it takes effect without a redeploy.
-3. Update `$env:USERPROFILE\.secrets\transit-ics.dev.vars`.
-4. Ask WSDOT to revoke the old code.
-5. If it reached git, removing it from history is not enough once pushed: treat it as public and do steps 1–4.
+2. Replace the old code with the new one in `$env:USERPROFILE\.secrets\transit-ics.dev.vars`, then run `npm run secret:put`. It takes effect without a redeploy.
+3. Ask WSDOT to revoke the old code.
+4. If it reached git, removing it from history is not enough once pushed: treat it as public and do steps 1–3.
 
 ## Troubleshooting
 

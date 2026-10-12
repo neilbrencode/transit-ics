@@ -10,11 +10,12 @@
 // Extra arguments pass through: npm run dev -- --port 8788
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ENV_FILE } from "./access-code.mjs";
 
-export const ENV_FILE = join(homedir(), ".secrets", "transit-ics.dev.vars");
+export { ENV_FILE };
 
 // The command to run, as data, so tests can check it without spawning
 export function devCommand({ extraArgs = [], envFileExists = existsSync(ENV_FILE), env = process.env } = {}) {
