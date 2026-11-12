@@ -12,5 +12,6 @@ Each Architecture Decision Record (ADR) captures one decision, why it was made, 
 | 6 | [WSF alerts are all-day banners from publish date through today](0006-wsf-event-timing.md) | Accepted |
 | 7 | [The WSDOT access code is a Worker secret, kept out of the repo and logs](0007-wsdot-access-code-secret.md) | Accepted |
 | 8 | [Placeholder ST periods take their dates from the alert text](0008-st-placeholder-periods.md) | Accepted |
+| 9 | [Pin the Cloudflare account from outside the repo](0009-pin-cloudflare-account.md) | Accepted |
 
 Decisions 5–10 in the original handoff (event shapes, service-day rollover, `TRANSP`, default route, local dev dependencies) are documented in the [README](../../README.md) and code comments. Promote any of them to an ADR if they come up for debate.

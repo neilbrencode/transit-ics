@@ -6,13 +6,13 @@ Feed URL template: `https://transit-ics.<subdomain>.workers.dev/transit.ics`. Th
 
 ```mermaid
 flowchart LR
-  A[1. Account subdomain] --> B[2. wrangler login] --> S[3. WSDOT access code] --> C[4. wrangler deploy] --> D[5. Verify] --> E[6. Subscribe in Outlook]
+  A[1. Account subdomain] --> B[2. wrangler login, expected account] --> S[3. WSDOT access code] --> C[4. npm run deploy] --> D[5. Verify] --> E[6. Subscribe in Outlook]
 ```
 
 ## Prerequisites
 
 - A Cloudflare account on the Workers **Free** plan. Nothing in this project needs a paid plan or a credit card.
-- Node.js 22 or later, and `npm install` run in the repo. `wrangler` is a local dev dependency, so always call it as `npx wrangler`. Never install it globally.
+- Node.js 22 or later, and `npm install` run in the repo. `wrangler` is a local dev dependency. Never install it globally. Anything that changes or reads the Worker goes through `npm run deploy`, `npm run secret:put` or `npm run wrangler -- <command>`, which pin it to this project's account ([ADR 9](adr/0009-pin-cloudflare-account.md)). Plain `npx wrangler` is only for `login`, `logout` and `whoami`.
 - Optional: `$env:WRANGLER_SEND_METRICS = "false"` to opt out of wrangler's usage telemetry.
 
 ## 1. Set a random `workers.dev` subdomain (one-time)
@@ -35,7 +35,7 @@ Every Worker on the account is served at `<worker-name>.<subdomain>.workers.dev`
 
 Changing the subdomain again later breaks every subscriber's URL.
 
-## 2. Sign in wrangler (one-time per machine)
+## 2. Sign in wrangler and save the expected account (one-time per machine)
 
 ```powershell
 npx wrangler login
@@ -45,10 +45,21 @@ This opens Cloudflare's **"Wrangler wants to access your account"** consent page
 
 - This is an **OAuth token with broad scope** (about 28 permissions across Workers, KV, D1, Pages and more), not a scoped API token. You can narrow it with **Edit Permissions** on the consent page.
 - It is stored at `%APPDATA%\xdg.config\.wrangler\config\default.toml`. Check with `npx wrangler whoami`.
+- **The login is shared by every project on this machine.** Signing in here signs any other wrangler project in to this account too, and the other way round. If you use wrangler for anything else, sign in again before working on either.
 - To revoke it: `npx wrangler logout`, or in the dashboard **My Profile → Access Management → Connected Applications**.
 - No API token or GitHub secret is involved. See [Optional: auto-deploy](#optional-auto-deploy) before creating one.
 
 On a machine without a browser, run `npx wrangler login --browser=false` and open the printed link yourself. The redirect goes to `localhost:8976`, so the browser must be on the same machine.
+
+### Save the expected account
+
+`npm run deploy` and the other scripts only act on the account saved here, and refuse if wrangler is signed in to any other ([ADR 9](adr/0009-pin-cloudflare-account.md)). Find the account ID in the `npx wrangler whoami` table, or in the dashboard's account home under **Copy account ID**, then save it outside the repo:
+
+```powershell
+notepad "$env:USERPROFILE\.secrets\transit-ics.deploy.vars"   # one line: CLOUDFLARE_ACCOUNT_ID=<32 hex characters>
+```
+
+Never put it in `wrangler.toml` (the scripts refuse any `account_id` there) or anywhere else in the repo. `npm test` reads the file on purpose and fails if the ID appears in any file git could commit.
 
 ## 3. Store the WSDOT access code (one-time)
 
@@ -60,19 +71,19 @@ Save it first as one line, `WSF_API_ACCESS_CODE=<code>`, in `$env:USERPROFILE\.s
 npm run secret:put   # scripts/put-secret.mjs: refuses a blank code, pipes it to wrangler on stdin
 ```
 
-Plain `npx wrangler secret put WSF_API_ACCESS_CODE` with the code pasted at the prompt also works in a normal terminal. Don't run that where there is no interactive prompt, such as a `!` command in Claude Code: wrangler then reads the value from empty input, uploads a **blank** secret and still prints `Success!` (seen 2026-10-12). `/wsf.ics` then returns 500 `WSF access code not configured`.
+Don't use plain `npx wrangler secret put WSF_API_ACCESS_CODE`. It isn't pinned to this account, and where there is no interactive prompt, such as a `!` command in Claude Code, wrangler reads the value from empty input, uploads a **blank** secret and still prints `Success!` (seen 2026-10-12). `/wsf.ics` then returns 500 `WSF access code not configured`.
 
-The value is encrypted and never shown again. Check it is set (names only, no values) with `npx wrangler secret list`. Run `npm run dev` to use the local copy. Avoid plain `npx wrangler dev` with the code loaded: its local request tracing writes each upstream URL, code included, to a SQLite file under `.wrangler/`. `scripts/dev.mjs` turns that off (`X_LOCAL_OBSERVABILITY=false`) and keeps local state outside the repo.
+The value is encrypted and never shown again. Check it is set (names only, no values) with `npm run wrangler -- secret list`. Run `npm run dev` to use the local copy. Avoid plain `npx wrangler dev` with the code loaded: its local request tracing writes each upstream URL, code included, to a SQLite file under `.wrangler/`. `scripts/dev.mjs` turns that off (`X_LOCAL_OBSERVABILITY=false`) and keeps local state outside the repo.
 
 Without the secret, `/wsf.ics` returns 500 `WSF access code not configured`; `/transit.ics` is unaffected.
 
 ## 4. Deploy
 
 ```powershell
-npm test && npx wrangler deploy
+npm test && npm run deploy
 ```
 
-`&&` runs the deploy only if the tests pass. It needs PowerShell 7+. In Windows PowerShell 5.1 the line is a parse error and nothing runs, so it fails safe.
+`npm run deploy` first checks that wrangler is signed in to the saved account, then runs `wrangler deploy` pinned to it. `&&` runs the deploy only if the tests pass. It needs PowerShell 7+. In Windows PowerShell 5.1 the line is a parse error and nothing runs, so it fails safe.
 
 Expected output:
 
@@ -116,7 +127,7 @@ Follow [Subscribe in Outlook.com](../README.md#subscribe-in-outlookcom) in the R
 Merge to `main` with CI green, then from an up-to-date `main`:
 
 ```powershell
-git switch main && git pull --ff-only && npm ci && npm test && npx wrangler deploy
+git switch main && git pull --ff-only && npm ci && npm test && npm run deploy
 ```
 
 Any failure stops the chain: uncommitted changes blocking the switch, a pull that isn't a fast-forward, or a failing test.
@@ -126,8 +137,8 @@ Subscribers need no action. The URL doesn't change, and calendar clients pick up
 ## Rolling back
 
 ```powershell
-npx wrangler deployments list                         # find the previous version id
-npx wrangler rollback <version-id> -m "reason"
+npm run wrangler -- deployments list                  # find the previous version id
+npm run wrangler -- rollback <version-id> -m "reason"
 ```
 
 Rollback switches traffic to an earlier uploaded version immediately. It does not change the repo, so fix or revert in git afterwards.
@@ -148,13 +159,17 @@ Versions before the ferries feed don't have `/wsf.ics`: rolling back past the fi
 | `curl: (6) Could not resolve host` right after setup | New subdomain still propagating | Wait a few minutes |
 | 502 `Upstream feed error` | Sound Transit's S3 feed is failing | Nothing. By design ([ADR 4](adr/0004-upstream-failure-returns-502.md)), Outlook keeps its last good copy |
 | Error 1027 | Daily free-plan request limit reached | Wait for the reset at midnight UTC. If it recurs, the hostname has probably leaked; see below |
-| 500 / error 1101 | Worker threw, e.g. the feed's JSON shape changed | `npx wrangler tail transit-ics`, then request the URL to see the exception |
+| 500 / error 1101 | Worker threw, e.g. the feed's JSON shape changed | `npm run wrangler -- tail transit-ics`, then request the URL to see the exception |
 | 400 `Invalid routes` | `?routes=` has an id that isn't 1–32 letters, digits or `_` (`/transit.ics`) or 1–4 digits (`/wsf.ics`), or more than 10 ids | Fix the subscription URL |
 | 400 `Invalid allroutes` | `?allroutes=` isn't `0` or `1` | Fix the subscription URL |
 | 500 `WSF access code not configured` | Secret missing | Section 3 |
 | 500 `WSF routes misconfigured` | `WSF_ROUTES` in `wrangler.toml` is invalid | Fix it and redeploy |
 | 502 `Upstream feed error` on `/wsf.ics` | WSDOT failing, or its response changed shape | Outlook keeps its last copy. If it persists, fetch the API yourself and compare with `test/fixture-wsf-2026-10-12.json` |
 | Calendar lags the website | Outlook's refresh cadence (hours) | Expected; keep email/SMS alerts for same-day changes |
+| `Wrangler is signed in to a different Cloudflare account, or not signed in` | wrangler's login is for another project's account, or has expired | `npx wrangler login` with this project's account (section 2) |
+| `No …transit-ics.deploy.vars` or `has no usable CLOUDFLARE_ACCOUNT_ID` | Expected account not saved, or mistyped | [Save the expected account](#save-the-expected-account) |
+| `Authentication error [code: 10000]` from wrangler | The login can't reach the pinned account | As for the wrong-account message |
+| `… isn't allowed` or `supports only` from `npm run wrangler` | A flag or command that could change the account, config or environment | Run it without that flag; see [ADR 9](adr/0009-pin-cloudflare-account.md) |
 | `wrangler dev` fails on Windows ARM64 | `workerd` has no Windows-ARM64 build | Use WSL, or skip local dev. `wrangler deploy` does not need `workerd` |
 
 ## Keep the hostname out of git

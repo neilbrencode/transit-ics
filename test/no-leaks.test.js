@@ -4,11 +4,12 @@
 // docs/runbook-cloudflare.md). That prevents accidental disclosure; it is
 // obscurity, not access control.
 //
-// Also guards the WSDOT access code (ADR 7). It lives outside the repo, in
-// ENV_FILE (scripts/access-code.mjs). When that file exists, this test reads
-// it on purpose and fails if the value appears in any file, reporting
-// file:line only, never the value. CI has no such file, so there the scanner
-// is proven with a synthetic secret instead.
+// Also guards the WSDOT access code (ADR 7) and the Cloudflare account ID
+// (ADR 9). They live outside the repo, in ENV_FILE and DEPLOY_FILE
+// (scripts/access-code.mjs). When those files exist, this test reads them on
+// purpose and fails if a value appears in any file, reporting file:line only,
+// never the value. CI has no such files, so there the scanner is proven with
+// synthetic secrets instead.
 //
 // Limits: scans files in the working tree (tracked, plus untracked files that
 // aren't ignored). It does not see commit messages, history, PRs or issues,
@@ -22,7 +23,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ENV_FILE, readAccessCodes } from "../scripts/access-code.mjs";
+import { DEPLOY_FILE, ENV_FILE, readAccessCodes, readAccountIds } from "../scripts/access-code.mjs";
+
+// Every local secret to scan for: all access codes and account IDs assigned
+// in the outside files (absent files contribute nothing)
+function localSecrets(envFile = ENV_FILE, deployFile = DEPLOY_FILE) {
+  return [...(readAccessCodes(envFile) ?? []), ...(readAccountIds(deployFile) ?? [])];
+}
 
 // The only hostnames that may appear: documented placeholders
 const ALLOWED = new Set([
@@ -44,7 +51,12 @@ function findLeaks(text, secrets = []) {
     for (const [match] of line.matchAll(HOST)) {
       if (!ALLOWED.has(match)) leaks.push({ line: i + 1, match });
     }
-    if (secrets.some((s) => line.includes(s) || line.includes(utf16(s)))) leaks.push({ line: i + 1, match: SECRET });
+    // Ignoring case: a hex account ID is the same ID in any case, and a code
+    // pasted in another case is still a leak
+    const lower = line.toLowerCase();
+    if (secrets.some((s) => lower.includes(s.toLowerCase()) || lower.includes(utf16(s.toLowerCase())))) {
+      leaks.push({ line: i + 1, match: SECRET });
+    }
   });
   return leaks;
 }
@@ -59,7 +71,7 @@ function scanRepo(root, secrets = []) {
   const files = out.toString("utf8").split("\0").filter(Boolean);
   const leaks = [];
   for (const file of files) {
-    const shown = secrets.reduce((name, s) => name.split(s).join(SECRET), file);
+    const shown = secrets.reduce((name, s) => name.replace(new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), SECRET), file);
     for (const { match } of findLeaks(file, secrets)) leaks.push({ file: shown, line: 0, match });
     const path = join(root, file);
     let text;
@@ -212,10 +224,42 @@ test("access code reader: absent file is null; a present file must hold a usable
   }
 });
 
-test("the real WSDOT access code is not in any committed or committable file", (t) => {
-  const codes = readAccessCodes(ENV_FILE);
-  if (codes === null) return t.skip("no access code file on this machine (normal in CI)");
-  const { files, leaks } = scanRepo(fileURLToPath(new URL("..", import.meta.url)), codes);
+test("local secrets: every access code and account ID in the outside files is scanned for", () => {
+  const ids = ["0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210"];
+  const dir = mkdtempSync(join(tmpdir(), "no-leaks-"));
+  try {
+    const envFile = join(dir, "x.dev.vars");
+    const deployFile = join(dir, "x.deploy.vars");
+    assert.deepEqual(localSecrets(envFile, deployFile), [], "absent files: nothing to scan for");
+    writeFileSync(envFile, "WSF_API_ACCESS_CODE=synthetic-code-5678\n");
+    writeFileSync(deployFile, `CLOUDFLARE_ACCOUNT_ID=${ids[0]}\r\nCLOUDFLARE_ACCOUNT_ID="${ids[1]}"\r\n`);
+    const secrets = localSecrets(envFile, deployFile);
+    assert.deepEqual(secrets, ["synthetic-code-5678", ...ids], "rotated IDs: both scanned");
+    for (const content of ["CLOUDFLARE_ACCOUNT_ID=\n", "CLOUDFLARE_ACCOUNT_ID=not-an-id\n", "OTHER=1\n"]) {
+      writeFileSync(deployFile, content);
+      assert.throws(() => readAccountIds(deployFile), (e) => /no usable/.test(e.message) && !/not-an-id/.test(e.message));
+    }
+
+    const repo = join(dir, "repo");
+    mkdirSync(repo);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    writeFileSync(join(repo, "a.md"), `old ${ids[0]}\n`);
+    writeFileSync(join(repo, "b.md"), `x\nnew ${ids[1].toUpperCase()}\n`);
+    const mixed = ids[0].replace(/[a-f]/g, (c, i) => (i % 2 ? c.toUpperCase() : c));
+    writeFileSync(join(repo, `c-${mixed}.md`), `mixed ${mixed}\n`);
+    const { leaks } = scanRepo(repo, secrets);
+    assert.deepEqual(leaks.map(({ file, line }) => `${file}:${line}`).sort(), ["a.md:1", "b.md:2", "c-<secret>.md:0", "c-<secret>.md:1"]);
+    const report = JSON.stringify(leaks).toLowerCase();
+    assert.ok(ids.every((id) => !report.includes(id)), "leak report must not contain the values");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the real WSDOT access code and account ID are not in any committed or committable file", (t) => {
+  const secrets = localSecrets();
+  if (!secrets.length) return t.skip("no local secret files on this machine (normal in CI)");
+  const { files, leaks } = scanRepo(fileURLToPath(new URL("..", import.meta.url)), secrets);
   assert.ok(files.length > 0, "scanned no files");
   // Location only: the value itself must never reach a test log
   assert.deepEqual(leaks.filter(({ match }) => match === SECRET).map(({ file, line }) => `${file}:${line}`), []);

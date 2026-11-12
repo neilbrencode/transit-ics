@@ -142,14 +142,19 @@ works on Windows x64. `workerd` has no Windows-ARM64 build, so on an ARM64
 laptop use WSL (Ubuntu) for `wrangler dev`, or skip it. `wrangler deploy` only
 uploads code and does not need `workerd`.
 
+`npm run deploy` refuses unless wrangler is signed in to this project's
+account, saved outside the repo first
+([runbook](docs/runbook-cloudflare.md#save-the-expected-account),
+[ADR 9](docs/adr/0009-pin-cloudflare-account.md)).
+
 Run these one at a time (PowerShell 7+; `&&` stops at the first failure):
 
 ```powershell
 cd transit-ics
 npm install                          # local only; nothing installed globally
 npm run dev                          # optional: http://localhost:8787/transit.ics and /wsf.ics against the live feeds
-npx wrangler login                   # opens browser, one-time
-npm test && npx wrangler deploy      # tests offline first; prints https://transit-ics.<subdomain>.workers.dev
+npx wrangler login                   # opens browser, one-time; the login is shared by every project
+npm test && npm run deploy           # tests offline first; prints https://transit-ics.<subdomain>.workers.dev
 ```
 
 Then open `https://transit-ics.<subdomain>.workers.dev/transit.ics` in a browser.

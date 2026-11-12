@@ -1,5 +1,6 @@
 // scripts/dev.mjs and scripts/put-secret.mjs handle the WSDOT access code
-// (ADR 7). Checked as data; nothing is spawned.
+// (ADR 7). Checked as data; nothing is spawned. The upload itself, which runs
+// through scripts/wrangler.mjs, is tested in wrangler-script.test.js.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -7,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ENV_FILE, devCommand } from "../scripts/dev.mjs";
-import { codeToUpload, uploadCommand } from "../scripts/put-secret.mjs";
+import { codeToUpload } from "../scripts/put-secret.mjs";
 
 test("with the secrets file: loads it, disables local tracing, keeps state outside the repo", () => {
   const { command, args, env, warning } = devCommand({
@@ -58,13 +59,4 @@ test("secret:put uploads the last assigned code and refuses a missing or blank o
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test("secret:put runs the local wrangler with log sanitising forced on, code only on stdin", () => {
-  const { command, args, env } = uploadCommand({ PATH: "x", WRANGLER_LOG_SANITIZE: "false" });
-  assert.equal(command, process.execPath);
-  assert.ok(existsSync(args[0]), "local wrangler must be installed");
-  assert.deepEqual(args.slice(1), ["secret", "put", "WSF_API_ACCESS_CODE"]);
-  assert.equal(env.WRANGLER_LOG_SANITIZE, "true", "must override an inherited false");
-  assert.equal(env.PATH, "x");
 });
