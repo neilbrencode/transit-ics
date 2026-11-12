@@ -178,6 +178,84 @@ test("empty feed still yields a valid calendar", () => {
   assert.equal(evs.length, 0);
 });
 
+// --- Placeholder periods (ADR 8) ------------------------------------------
+const pst = (y, m, d, h = 3) => Date.UTC(y, m - 1, d, h + 8) / 1000; // Pacific Standard Time, Nov-Mar only
+const placeholder = (y, m, d) => ({ start: pst(y, m, d), end: pst(y, m, d) + 300 });
+const ALERT_21608 = "Link shuttle buses will replace 2 Line trains between Int'l District/Chinatown and South Bellevue stations for scheduled maintenance from start of service Saturday, Nov. 14 until end of service Sunday, Nov. 15.";
+
+function oneAlert(periods, header, body = "") {
+  const tr = (t) => ({ translation: [{ text: t, language: "en" }] });
+  return {
+    header: { timestamp: NOW },
+    entity: [{ id: "9", alert: {
+      header_text: tr(header), description_text: tr(body),
+      informed_entity: [{ route_id: "2LINE" }], active_period: periods,
+    } }],
+  };
+}
+// [start, end, all-day?] of every event
+const spans = (feed) => events(buildCalendar(feed, ["2LINE"], NOW))
+  .map((e) => [e.startDate.toString(), e.endDate.toString(), e.startDate.isDate]);
+
+test("placeholder 3:00-3:05 a.m. period uses the weekend in the headline (alert 21608)", () => {
+  assert.deepEqual(spans(oneAlert([placeholder(2026, 11, 14)], ALERT_21608)),
+    [["2026-11-14", "2026-11-16", true]]);
+});
+
+test("headline dates across New Year, with or without years, from either side", () => {
+  const expected = [["2026-12-31", "2027-01-03", true]];
+  assert.deepEqual(spans(oneAlert([placeholder(2026, 12, 31)], "Closed Dec. 31, 2026 through Jan. 2, 2027.")), expected);
+  assert.deepEqual(spans(oneAlert([placeholder(2026, 12, 31)], "Closed Dec. 31 through Jan. 2.")), expected);
+  assert.deepEqual(spans(oneAlert([placeholder(2027, 1, 1)], "Closed Dec. 31 through Jan. 2.")), expected);
+  assert.deepEqual(spans(oneAlert([placeholder(2026, 12, 31)], "Closed Dec. 31 through Jan. 2, 2027.")), expected);
+});
+
+test("headline range with weekday commas ('Tuesday, Dec. 8, through Saturday, Dec. 12')", () => {
+  assert.deepEqual(spans(oneAlert([placeholder(2026, 12, 8)], "From Tuesday, Dec. 8, through Saturday, Dec. 12, work.")),
+    [["2026-12-08", "2026-12-13", true]]);
+});
+
+test("placeholder without dates in the text is an all-day event on that day", () => {
+  assert.deepEqual(spans(oneAlert([placeholder(2026, 11, 14)], "Shuttle buses this weekend.")),
+    [["2026-11-14", "2026-11-15", true]]);
+});
+
+test("dates in the description are used when the headline has none; the headline wins otherwise", () => {
+  const p = [placeholder(2026, 11, 14)];
+  assert.deepEqual(spans(oneAlert(p, "Shuttle buses.", "From Nov. 14 to Nov. 15.")), [["2026-11-14", "2026-11-16", true]]);
+  assert.deepEqual(spans(oneAlert(p, "From Nov. 14 to Nov. 17.", "From Nov. 14 to Nov. 15.")), [["2026-11-14", "2026-11-18", true]]);
+});
+
+test("impossible dates fall back to the period's day; leap day and month-end DTEND work", () => {
+  assert.deepEqual(spans(oneAlert([placeholder(2027, 2, 27)], "Feb. 27 through Feb. 30.")), [["2027-02-27", "2027-02-28", true]]);
+  assert.deepEqual(spans(oneAlert([placeholder(2027, 2, 28)], "Feb. 28 through Feb. 29.")), [["2027-02-28", "2027-03-01", true]]);
+  assert.deepEqual(spans(oneAlert([placeholder(2028, 2, 28)], "Feb. 28 through Feb. 29.")), [["2028-02-28", "2028-03-01", true]]);
+  assert.deepEqual(spans(oneAlert([placeholder(2028, 2, 27)], "Feb. 27 through Feb. 29.")), [["2028-02-27", "2028-03-01", true]]);
+});
+
+test("text start must be within 7 days of the period, and span at most 31 days", () => {
+  const p = [placeholder(2026, 11, 14)];
+  assert.deepEqual(spans(oneAlert(p, "Nov. 21 through Nov. 22.")), [["2026-11-21", "2026-11-23", true]]);
+  assert.deepEqual(spans(oneAlert(p, "Nov. 22 through Nov. 23.")), [["2026-11-14", "2026-11-15", true]]);
+  assert.deepEqual(spans(oneAlert(p, "Nov. 14 through Dec. 15.")), [["2026-11-14", "2026-12-16", true]]);
+  assert.deepEqual(spans(oneAlert(p, "Nov. 14 through Dec. 16.")), [["2026-11-14", "2026-11-15", true]]);
+  assert.deepEqual(spans(oneAlert(p, "Nov. 15 through Nov. 14.")), [["2026-11-14", "2026-11-15", true]]);
+});
+
+test("short periods that aren't placeholders stay timed events", () => {
+  const timed = (feed) => spans(feed).map(([, , allDay]) => allDay);
+  const at3 = pst(2026, 11, 14);
+  assert.deepEqual(timed(oneAlert([{ start: at3, end: at3 + 15 * 60 }], ALERT_21608)), [false]); // 15 minutes
+  assert.deepEqual(timed(oneAlert([{ start: pst(2026, 11, 14, 20), end: pst(2026, 11, 14, 20) + 300 }], ALERT_21608)), [false]); // 8 p.m.
+  assert.deepEqual(timed(oneAlert([{ end: NOW + 300 }], ALERT_21608)), [false]); // no start: starts now
+});
+
+test("each period is judged on its own", () => {
+  const evening = { start: pst(2026, 11, 20, 20), end: pst(2026, 11, 20, 22) };
+  assert.deepEqual(spans(oneAlert([placeholder(2026, 11, 14), evening], ALERT_21608)).map(([s, , allDay]) => [s, allDay]),
+    [["2026-11-14", true], ["2026-11-21T04:00:00Z", false]]); // 8 p.m. PT Nov 20
+});
+
 // --- HTTP handler (fetch mocked) ------------------------------------------
 import worker from "../src/index.js";
 

@@ -5,7 +5,8 @@
 // disappears from the feed disappears from the calendar on the next refresh.
 
 import {
-  CACHE_SECONDS, calendarHeader, calendarResponse, escape, finish, singleLine, toLocalDate, toUtcStamp, uidSafe,
+  CACHE_SECONDS, calendarHeader, calendarResponse, dateStamp, escape, finish, localParts, singleLine, toLocalDate,
+  toUtcStamp, uidSafe,
 } from "./ical.js";
 
 const FEED_URL = "https://s3.amazonaws.com/st-service-alerts-prod/alerts_pb.json";
@@ -18,6 +19,22 @@ const ALL_DAY_THRESHOLD_HOURS = 24;
 // Link runs past midnight, so "until end of service Sunday" arrives as ~2:30 a.m.
 // Monday. Treat end times before this hour as the previous service day.
 const SERVICE_DAY_ROLLOVER_HOURS = 4;
+// ST sometimes publishes a planned closure with a token period (e.g. 3:00-3:05 a.m.
+// on its first day) and the real dates only in the text. A period this short that
+// starts while Link isn't running is treated as such a placeholder (ADR 8).
+const PLACEHOLDER_MAX_MINUTES = 15;
+const NO_SERVICE_HOURS = [1, 5]; // [from, to) Pacific
+// Dates read from the text must start this close to the period, and span at most
+// this many days (end date minus start date), or they're ignored.
+const TEXT_START_WINDOW_DAYS = 7;
+const TEXT_MAX_SPAN_DAYS = 31;
+const DAY_MS = 86400 * 1000;
+
+// "[start of service] [Saturday,] Nov. 14[, 2026][,] until [end of service] [on] [Sunday,] Nov. 15[, 2026]"
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const DATE = String.raw`(?:(?:mon|tues|wednes|thurs|fri|satur|sun)day,?\s+)?\b(${MONTHS.join("|")})[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b(?:,?\s+(\d{4})\b)?`;
+const SERVICE = String.raw`(?:(?:start|end)\s+of\s+service\s+)?(?:on\s+)?`;
+const TEXT_RANGE = new RegExp(String.raw`${SERVICE}${DATE},?\s+(?:until|through|thru|to|-|–)\s+${SERVICE}${DATE}`, "i");
 
 // GET /transit.ics                    -> 2 Line alerts (default)
 // GET /transit.ics?routes=2LINE,100479 -> 2 Line + 1 Line
@@ -59,10 +76,12 @@ export function buildCalendar(feed, routes, now = Math.floor(Date.now() / 1000))
     const alertRoutes = new Set((alert.informed_entity ?? []).map((e) => e.route_id));
     if (![...alertRoutes].some((r) => wanted.has(r))) continue;
 
-    const summary = text(alert.header_text) || "Sound Transit alert";
+    const header = text(alert.header_text);
+    const summary = header || "Sound Transit alert";
+    const body = text(alert.description_text);
     const link = singleLine(text(alert.url));
     const id = uidSafe(String(entity.id));
-    const description = [text(alert.description_text), link].filter(Boolean).join("\n\n");
+    const description = [body, link].filter(Boolean).join("\n\n");
     const periods = alert.active_period?.length ? alert.active_period : [{}];
 
     periods.forEach((p, i) => {
@@ -76,7 +95,13 @@ export function buildCalendar(feed, routes, now = Math.floor(Date.now() / 1000))
       lines.push("BEGIN:VEVENT");
       lines.push(`UID:st-alert-${id}-${i}@transit-ics`);
       lines.push(`DTSTAMP:${stamp}`);
-      if (allDay) {
+      if (isPlaceholder(p)) {
+        // All-day across the dates in the headline (or description), else that day
+        const [from, to] = textRange(header, p.start) ?? textRange(body, p.start)
+          ?? [toLocalDate(p.start), toLocalDate(p.start, 1)];
+        lines.push(`DTSTART;VALUE=DATE:${from}`);
+        lines.push(`DTEND;VALUE=DATE:${to}`);
+      } else if (allDay) {
         lines.push(`DTSTART;VALUE=DATE:${toLocalDate(start)}`);
         // DTEND is exclusive for all-day events, so use the day after the end date
         const serviceDayEnd = Math.max(start, end - SERVICE_DAY_ROLLOVER_HOURS * 3600);
@@ -96,6 +121,41 @@ export function buildCalendar(feed, routes, now = Math.floor(Date.now() / 1000))
   }
 
   return finish(lines);
+}
+
+function isPlaceholder(p) {
+  if (p.start == null || p.end == null || p.end - p.start >= PLACEHOLDER_MAX_MINUTES * 60) return false;
+  const { hour } = localParts(p.start);
+  return hour >= NO_SERVICE_HOURS[0] && hour < NO_SERVICE_HOURS[1];
+}
+
+// [DTSTART, exclusive DTEND] as YYYYMMDD from a date range in the text, or null.
+// A missing year is whichever of last/this/next year puts the start near the
+// period; the end year follows the start, rolling over at New Year.
+function textRange(s, periodStart) {
+  const m = TEXT_RANGE.exec(s);
+  if (!m) return null;
+  const [, mon1, day1, year1, mon2, day2, year2] = m;
+  const { year, month, day } = localParts(periodStart);
+  const anchor = Date.UTC(year, month - 1, day);
+  const matches = (year1 ? [Number(year1)] : [year - 1, year, year + 1]).flatMap((y) => {
+    const start = calendarDate(y, mon1, day1);
+    if (start == null) return [];
+    let end = calendarDate(year2 ? Number(year2) : y, mon2, day2);
+    if (end != null && !year2 && end < start) end = calendarDate(y + 1, mon2, day2);
+    const ok = end != null && end >= start && end - start <= TEXT_MAX_SPAN_DAYS * DAY_MS
+      && Math.abs(start - anchor) <= TEXT_START_WINDOW_DAYS * DAY_MS;
+    return ok ? [[dateStamp(start), dateStamp(end + DAY_MS)]] : [];
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+// UTC-midnight ms of a real calendar date, or null (e.g. Feb 30)
+function calendarDate(year, monthName, day) {
+  const month = MONTHS.indexOf(monthName.slice(0, 3).toLowerCase());
+  const ms = Date.UTC(year, month, Number(day));
+  const d = new Date(ms);
+  return d.getUTCMonth() === month && d.getUTCDate() === Number(day) ? ms : null;
 }
 
 function text(translated) {

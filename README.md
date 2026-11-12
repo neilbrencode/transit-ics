@@ -27,6 +27,7 @@ flowchart LR
 | Alert shape | Calendar event |
 |---|---|
 | Up to 24 hours (e.g. a concert, 8:00–11:30 p.m.) | Timed event |
+| Under 15 minutes, starting 1–5 a.m. (a placeholder, e.g. 3:00–3:05 a.m.) | All-day banner across the dates in the headline ("Saturday, Nov. 14 until … Sunday, Nov. 15"), or that day if none ([ADR 8](docs/adr/0008-st-placeholder-periods.md)) |
 | Longer than 24 hours (e.g. a weekend closure) | All-day banner across those dates |
 | No end time ("until further notice") | All-day banner from start through today, prefixed `[Ongoing]` |
 
