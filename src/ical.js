@@ -37,14 +37,24 @@ export function toUtcStamp(epochSeconds) {
   return new Date(epochSeconds * 1000).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 
-// YYYYMMDD in Pacific time, optionally shifted by whole days
-export function toLocalDate(epochSeconds, addDays = 0) {
+// Pacific-time calendar fields of an instant: { year, month (1-12), day, hour (0-23) }
+export function localParts(epochSeconds) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
+    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
   }).formatToParts(new Date(epochSeconds * 1000));
   const get = (type) => Number(parts.find((p) => p.type === type).value);
-  const d = new Date(Date.UTC(get("year"), get("month") - 1, get("day") + addDays));
-  return d.toISOString().slice(0, 10).replace(/-/g, "");
+  return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour") };
+}
+
+// YYYYMMDD in Pacific time, optionally shifted by whole days
+export function toLocalDate(epochSeconds, addDays = 0) {
+  const { year, month, day } = localParts(epochSeconds);
+  return dateStamp(Date.UTC(year, month - 1, day + addDays));
+}
+
+// YYYYMMDD of a UTC-midnight millisecond timestamp (a calendar date, not an instant)
+export function dateStamp(utcMs) {
+  return new Date(utcMs).toISOString().slice(0, 10).replace(/-/g, "");
 }
 
 // UID-safe id: escape each UTF-16 code unit outside [A-Za-z0-9._~-] as a
