@@ -7,7 +7,8 @@
     "test": "node --test",
     "dev": "node scripts/dev.mjs",
     "secret:put": "node scripts/put-secret.mjs",
-    "deploy": "wrangler deploy",
+    "deploy": "node scripts/wrangler.mjs deploy",
+    "wrangler": "node scripts/wrangler.mjs",
     "lint:md": "markdownlint-cli2"
   },
   "devDependencies": {

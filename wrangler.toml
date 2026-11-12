@@ -6,7 +6,8 @@ workers_dev = true
 preview_urls = false
 
 # Ferries feed defaults (/wsf.ics). The WSDOT access code is a secret, never
-# a var: npx wrangler secret put WSF_API_ACCESS_CODE
+# a var: npm run secret:put (ADR 7). No account in this file either: deploy
+# with npm run deploy, which pins it from outside the repo (ADR 9).
 [vars]
 WSF_ROUTES = "5,3,6" # Seattle/Bainbridge, Seattle/Bremerton, Edmonds/Kingston
 WSF_INCLUDE_ALL_ROUTES = "true"

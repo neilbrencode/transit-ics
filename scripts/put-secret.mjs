@@ -4,9 +4,11 @@
 // one, and pipes it to `wrangler secret put` on stdin, so it is never typed,
 // displayed or passed as a command-line argument. Wrangler itself uploads a
 // blank value when stdin is empty, which would break /wsf.ics with a 500.
-import { spawn } from "node:child_process";
+// Runs through scripts/wrangler.mjs, so it is pinned to this project's
+// Cloudflare account and wrangler's log sanitising is forced on (ADR 9).
 import { fileURLToPath } from "node:url";
 import { ENV_FILE, readAccessCodes } from "./access-code.mjs";
+import { run } from "./wrangler.mjs";
 
 // The code to upload (the last assignment, as dotenv/wrangler would load it)
 export function codeToUpload(path = ENV_FILE) {
@@ -15,28 +17,20 @@ export function codeToUpload(path = ENV_FILE) {
   return codes.at(-1);
 }
 
-// The upload command, as data, so tests can check it without spawning.
-// WRANGLER_LOG_SANITIZE=false would make wrangler's debug log include the
-// request body, code included, so it is forced on whatever the shell says.
-export function uploadCommand(env = process.env) {
-  const wrangler = fileURLToPath(new URL("../node_modules/wrangler/bin/wrangler.js", import.meta.url));
-  return {
-    command: process.execPath,
-    args: [wrangler, "secret", "put", "WSF_API_ACCESS_CODE"],
-    env: { ...env, WRANGLER_LOG_SANITIZE: "true" },
-  };
+export const UPLOAD_ARGS = ["secret", "put", "WSF_API_ACCESS_CODE"];
+
+// Upload the code. deps are passed to run(), so tests can inject the processes.
+export async function putSecret({ path = ENV_FILE, log = console.error, ...deps } = {}) {
+  let code;
+  try {
+    code = codeToUpload(path);
+  } catch (e) {
+    log(e.message);
+    return 1;
+  }
+  return run(UPLOAD_ARGS, { ...deps, log, input: code });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  let code;
-  try {
-    code = codeToUpload();
-  } catch (e) {
-    console.error(e.message);
-    process.exit(1);
-  }
-  const { command, args, env } = uploadCommand();
-  const child = spawn(command, args, { stdio: ["pipe", "inherit", "inherit"], env });
-  child.stdin.end(code);
-  child.on("exit", (status, signal) => process.exit(signal ? 1 : status ?? 0));
+  process.exitCode = await putSecret();
 }
